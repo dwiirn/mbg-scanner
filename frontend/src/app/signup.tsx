@@ -5,13 +5,13 @@ import {
   View,
   TextInput,
   TouchableOpacity,
-  SafeAreaView,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   Alert,
   ActivityIndicator,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
@@ -23,6 +23,7 @@ export default function SignUpScreen() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [kitchenUnit, setKitchenUnit] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [validationError, setValidationError] = useState("");
@@ -140,26 +141,34 @@ export default function SignUpScreen() {
 
             {/* Password Field */}
             <Text style={styles.label}>Password</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Masukkan kata sandi Anda"
-              placeholderTextColor="#9CA3AF"
-              secureTextEntry={true}
-              autoCapitalize="none"
-              autoCorrect={false}
-              value={password}
-              onChangeText={setPassword}
-            />
+            <View style={styles.passwordWrapper}>
+              <TextInput
+                style={[styles.input, styles.passwordInput]}
+                placeholder="Masukkan kata sandi Anda"
+                placeholderTextColor="#9CA3AF"
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+                value={password}
+                onChangeText={setPassword}
+              />
+              <TouchableOpacity
+                style={styles.eyeButton}
+                onPress={() => setShowPassword((prev) => !prev)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Feather name={showPassword ? 'eye-off' : 'eye'} size={20} color="#9CA3AF" />
+              </TouchableOpacity>
+            </View>
 
             {/* Kitchen Unit Field */}
             <Text style={styles.label}>Dapur Unit Layanan</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { marginBottom: 20 }]}
               placeholder="Masukkan dapur unit layanan Anda"
               placeholderTextColor="#9CA3AF"
               value={kitchenUnit}
               onChangeText={setKitchenUnit}
-              style={[styles.input, { marginBottom: 20 }]}
             />
 
             {/* Error Message Inline validation */}
@@ -278,6 +287,23 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: "#0D0E10",
     marginBottom: 16,
+  },
+  passwordWrapper: {
+    position: "relative",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  passwordInput: {
+    marginBottom: 0,
+    paddingRight: 48,
+  },
+  eyeButton: {
+    position: "absolute",
+    right: 12,
+    top: 0,
+    bottom: 0,
+    justifyContent: "center",
+    paddingHorizontal: 4,
   },
   registerButton: {
     backgroundColor: "#1E60D5", // High premium blue background

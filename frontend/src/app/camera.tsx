@@ -4,13 +4,12 @@ import {
   Text,
   View,
   TouchableOpacity,
-  SafeAreaView,
   Image,
   Animated,
   ActivityIndicator,
   Platform,
-  StatusBar as RNStatusBar,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { showAlert } from '@/utils/alert';
 import { useRouter } from 'expo-router';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -31,6 +30,8 @@ export default function CameraScreen() {
   const [cameraState, setCameraState] = useState<'empty' | 'scanning' | 'captured'>('empty');
   const [capturedPhotoUri, setCapturedPhotoUri] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<'Segar' | 'Tidak Segar' | null>(null);
+  // Nama file gambar yang disimpan backend (dari respons /analyze)
+  const [scanImage, setScanImage] = useState<string | null>(null);
   
   // Track dynamically generated RGB values for realistic simulations
   const [currentRgb, setCurrentRgb] = useState({ r: 0, g: 0, b: 0 });
@@ -112,10 +113,11 @@ export default function CameraScreen() {
 
           if (!active) return;
 
-          const { status, r, g, b } = response.data;
+          const { status, r, g, b, image } = response.data;
           scanLoop.current?.stop();
           setAnalysisResult(status);
           setCurrentRgb({ r, g, b });
+          setScanImage(image || null);
           setCameraState('captured');
         } catch (error: any) {
           console.error('Error analyzing image:', error);
@@ -173,6 +175,7 @@ export default function CameraScreen() {
     setCameraState('empty');
     setAnalysisResult(null);
     setCapturedPhotoUri(null);
+    setScanImage(null);
     scanAnim.setValue(0);
   };
 
@@ -182,7 +185,7 @@ export default function CameraScreen() {
     if (token === 'demo-jwt-token-expired-24h' || !token) {
       // Local demo fallback
       const finalRgb = `R: ${currentRgb.r}, G: ${currentRgb.g}, B: ${currentRgb.b}`;
-      addHistoryItem(status, finalRgb, user?.fullName || 'Admin Demo');
+      addHistoryItem(status, finalRgb, user?.fullName || 'Admin Demo', scanImage || capturedPhotoUri || undefined);
       showAlert('Sukses', 'Hasil analisis berhasil disimpan ke riwayat (Demo).', () => {
         router.replace('/home');
       });
@@ -198,6 +201,7 @@ export default function CameraScreen() {
           r: currentRgb.r,
           g: currentRgb.g,
           b: currentRgb.b,
+          image: scanImage,
         },
         {
           headers: {
@@ -225,7 +229,7 @@ export default function CameraScreen() {
 
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [4, 3],
         quality: 0.8,
@@ -318,15 +322,20 @@ export default function CameraScreen() {
                   <Text style={styles.emptyViewportText}>Kamera Web Demo (Klik Ambil Foto)</Text>
                 </View>
               ) : (
-                <CameraView
-                  style={StyleSheet.absoluteFill}
-                  facing={facing}
-                  ref={cameraRef}
-                >
-                  <View style={styles.emptyViewport}>
+                <>
+                  <CameraView
+                    style={StyleSheet.absoluteFill}
+                    facing={facing}
+                    ref={cameraRef}
+                  />
+                  {/* Overlay rendered as sibling (CameraView no longer supports children) */}
+                  <View
+                    style={[StyleSheet.absoluteFill, styles.emptyViewport]}
+                    pointerEvents="none"
+                  >
                     <Text style={styles.emptyViewportText}>Posisikan objek dalam bingkai</Text>
                   </View>
-                </CameraView>
+                </>
               )
             )}
 
@@ -557,8 +566,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   topHeader: {
-    height: Platform.OS === 'android' ? 60 + (RNStatusBar.currentHeight || 0) : 60,
-    paddingTop: Platform.OS === 'android' ? RNStatusBar.currentHeight || 0 : 0,
+    height: 60,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

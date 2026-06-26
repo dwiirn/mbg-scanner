@@ -2,7 +2,7 @@ import { Platform } from 'react-native';
 
 // Silakan ubah IP ini ke alamat IP komputer lokal Anda jika menggunakan HP fisik untuk pengujian
 // Emulator Android menggunakan '10.0.2.2' sebagai jembatan ke localhost PC
-const LOCAL_IP = '10.0.2.2'; 
+const LOCAL_IP = '192.168.100.178'; 
 const DEV_PORT = '5000';
 
 export const API_URL = Platform.select({
@@ -20,10 +20,13 @@ export const ENDPOINTS = {
   UPDATE_PASSWORD: `${API_URL}/profile/password`,
 };
 
-export const getAvatarUrl = (pictureId: string | null | undefined) => {
-  if (!pictureId) return null;
-  if (pictureId.startsWith('http://') || pictureId.startsWith('https://')) {
-    return pictureId;
+// Bangun URL lengkap ke file di folder uploads backend.
+export const getUploadUrl = (fileName: string | null | undefined) => {
+  if (!fileName) return null;
+  if (fileName.startsWith('http://') || fileName.startsWith('https://')) {
+    return fileName;
   }
-  return `${API_URL}/uploads/${pictureId}`;
+  return `${API_URL}/uploads/${fileName}`;
 };
+
+export const getAvatarUrl = (pictureId: string | null | undefined) => getUploadUrl(pictureId);

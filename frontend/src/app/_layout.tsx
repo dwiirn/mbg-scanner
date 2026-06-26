@@ -1,6 +1,7 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
 import { Stack } from 'expo-router';
 import { useColorScheme, Platform } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import CustomAlert from '../components/ui/custom-alert';
 
@@ -8,6 +9,7 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
 
   return (
+    <SafeAreaProvider>
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <StatusBar style="light" />
       {Platform.OS === 'web' && (
@@ -44,5 +46,6 @@ export default function RootLayout() {
       </Stack>
       <CustomAlert />
     </ThemeProvider>
+    </SafeAreaProvider>
   );
 }

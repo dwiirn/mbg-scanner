@@ -4,15 +4,15 @@ import {
   Text,
   View,
   TouchableOpacity,
-  SafeAreaView,
   Image,
   ScrollView,
   Platform,
-  StatusBar as RNStatusBar,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
+import { getUploadUrl } from '../constants/api';
 
 export default function DetailScreen() {
   const router = useRouter();
@@ -29,6 +29,7 @@ export default function DetailScreen() {
   const date = (params.date as string) || '23 Jun 2026';
   const rgb = (params.rgb as string) || 'R: 220, G: 168, B: 155';
   const staff = (params.staff as string) || 'Dwi Prasetyo';
+  const image = (params.image as string) || '';
   const location = 'SPPG Kalisari 1';
 
   // Parse RGB values to render a dynamic color preview block
@@ -76,10 +77,10 @@ export default function DetailScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Main Detail Card */}
         <View style={[styles.detailCard, styles.shadowEffect]}>
-          {/* Meat Image Header */}
+          {/* Meat Image Header: gambar hasil scan dari uploads, fallback ke default */}
           <View style={styles.imageContainer}>
             <Image
-              source={require('@/assets/images/raw_chicken.jpg')}
+              source={image ? { uri: getUploadUrl(image)! } : require('@/assets/images/raw_chicken.jpg')}
               style={styles.meatImage}
               resizeMode="cover"
             />
@@ -196,8 +197,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC', // Slate 50 background
   },
   topHeader: {
-    height: Platform.OS === 'android' ? 60 + (RNStatusBar.currentHeight || 0) : 60,
-    paddingTop: Platform.OS === 'android' ? RNStatusBar.currentHeight || 0 : 0,
+    height: 60,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

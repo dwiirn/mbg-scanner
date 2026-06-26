@@ -14,6 +14,7 @@ type Scan struct {
 	R         uint8     `gorm:"type:tinyint unsigned;not null" json:"r"`
 	G         uint8     `gorm:"type:tinyint unsigned;not null" json:"g"`
 	B         uint8     `gorm:"type:tinyint unsigned;not null" json:"b"`
+	Image     string    `gorm:"type:varchar(255)" json:"image"` // nama file gambar di folder uploads
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }

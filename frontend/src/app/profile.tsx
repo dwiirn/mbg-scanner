@@ -4,16 +4,15 @@ import {
   Text,
   View,
   TouchableOpacity,
-  SafeAreaView,
   ScrollView,
   TextInput,
   Alert,
   KeyboardAvoidingView,
   Platform,
-  StatusBar as RNStatusBar,
   Animated,
   Image,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
@@ -22,6 +21,7 @@ import axios from 'axios';
 import { ENDPOINTS, getAvatarUrl } from '../constants/api';
 import { useAuthStore } from '../store/auth-store';
 import { showAlert, showConfirm } from '../utils/alert';
+import { useAlertStore } from '../store/alert-store';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -120,6 +120,9 @@ export default function ProfileScreen() {
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showOldPassword, setShowOldPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Get initials helper
   const getInitials = (name: string) => {
@@ -136,37 +139,27 @@ export default function ProfileScreen() {
     setIsEditing(true);
   };
 
-  const handleChoosePicture = async () => {
-    // Request permission first
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      showAlert('Izin Ditolak', 'Aplikasi memerlukan akses ke galeri foto Anda untuk mengubah foto profil.');
-      return;
-    }
+  // Picker options shared by camera & gallery
+  const pickerOptions: ImagePicker.ImagePickerOptions = {
+    mediaTypes: ['images'],
+    allowsEditing: true,
+    aspect: [1, 1],
+    quality: 0.7,
+  };
 
+  // Upload the chosen image asset to the backend and sync the store
+  const uploadAvatar = async (asset: ImagePicker.ImagePickerAsset) => {
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.7,
-      });
-
-      if (result.canceled || !result.assets || result.assets.length === 0) {
-        return;
-      }
-
       setIsFetching(true); // show skeleton while uploading
-      const selectedImage = result.assets[0];
-      const localUri = selectedImage.uri;
+      const localUri = asset.uri;
       const filename = localUri.split('/').pop() || 'avatar.png';
-      
+
       // Determine content type
       const match = /\.(\w+)$/.exec(filename);
       const type = match ? `image/${match[1]}` : `image/png`;
 
       const formData = new FormData();
-      
+
       if (Platform.OS === 'web') {
         const response = await fetch(localUri);
         const blob = await response.blob();
@@ -192,7 +185,7 @@ export default function ProfileScreen() {
 
       // Sync Zustand store
       useAuthStore.setState({ user: updatedUser });
-      
+
       showAlert('Sukses', 'Foto profil Anda berhasil diperbarui!');
     } catch (error: any) {
       console.error('Error uploading avatar:', error);
@@ -201,6 +194,54 @@ export default function ProfileScreen() {
     } finally {
       setIsFetching(false);
     }
+  };
+
+  // Take a new photo with the device camera
+  const takePhotoFromCamera = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      showAlert('Izin Ditolak', 'Aplikasi memerlukan akses kamera untuk mengambil foto profil.');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync(pickerOptions);
+    if (result.canceled || !result.assets || result.assets.length === 0) {
+      return;
+    }
+    await uploadAvatar(result.assets[0]);
+  };
+
+  // Pick an existing photo from the gallery
+  const pickFromGallery = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      showAlert('Izin Ditolak', 'Aplikasi memerlukan akses ke galeri foto Anda untuk mengubah foto profil.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync(pickerOptions);
+    if (result.canceled || !result.assets || result.assets.length === 0) {
+      return;
+    }
+    await uploadAvatar(result.assets[0]);
+  };
+
+  const handleChoosePicture = () => {
+    // Web tidak mendukung kamera lewat ImagePicker secara konsisten -> langsung galeri
+    if (Platform.OS === 'web') {
+      pickFromGallery();
+      return;
+    }
+
+    // Tampilkan dialog pilih sumber: Kamera atau Galeri
+    useAlertStore.getState().showConfirm({
+      title: 'Ubah Foto Profil',
+      message: 'Pilih sumber foto yang ingin digunakan.',
+      confirmText: 'Kamera',
+      cancelText: 'Galeri',
+      onConfirm: takePhotoFromCamera,
+      onCancel: pickFromGallery,
+    });
   };
 
   const handleSaveChanges = async () => {
@@ -397,7 +438,7 @@ export default function ProfileScreen() {
                   activeOpacity={0.8}
                 >
                   {user?.pictureId ? (
-                    <Image source={{ uri: getAvatarUrl(user.pictureId) }} style={styles.avatarImage} />
+                    <Image source={{ uri: getAvatarUrl(user.pictureId) || undefined }} style={styles.avatarImage} />
                   ) : (
                     <Text style={styles.avatarText}>{getInitials(fullName)}</Text>
                   )}
@@ -534,36 +575,63 @@ export default function ProfileScreen() {
 
                 {/* Old Password Input */}
                 <Text style={styles.inputLabel}>Kata Sandi Lama</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Masukkan kata sandi lama Anda"
-                  placeholderTextColor="#9CA3AF"
-                  secureTextEntry={true}
-                  value={oldPassword}
-                  onChangeText={setOldPassword}
-                />
+                <View style={styles.passwordWrapper}>
+                  <TextInput
+                    style={[styles.input, styles.passwordInput]}
+                    placeholder="Masukkan kata sandi lama Anda"
+                    placeholderTextColor="#9CA3AF"
+                    secureTextEntry={!showOldPassword}
+                    value={oldPassword}
+                    onChangeText={setOldPassword}
+                  />
+                  <TouchableOpacity
+                    style={styles.eyeButton}
+                    onPress={() => setShowOldPassword((prev) => !prev)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Feather name={showOldPassword ? 'eye-off' : 'eye'} size={20} color="#9CA3AF" />
+                  </TouchableOpacity>
+                </View>
 
                 {/* New Password Input */}
                 <Text style={styles.inputLabel}>Kata Sandi Baru</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Masukkan kata sandi baru Anda"
-                  placeholderTextColor="#9CA3AF"
-                  secureTextEntry={true}
-                  value={newPassword}
-                  onChangeText={setNewPassword}
-                />
+                <View style={styles.passwordWrapper}>
+                  <TextInput
+                    style={[styles.input, styles.passwordInput]}
+                    placeholder="Masukkan kata sandi baru Anda"
+                    placeholderTextColor="#9CA3AF"
+                    secureTextEntry={!showNewPassword}
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                  />
+                  <TouchableOpacity
+                    style={styles.eyeButton}
+                    onPress={() => setShowNewPassword((prev) => !prev)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Feather name={showNewPassword ? 'eye-off' : 'eye'} size={20} color="#9CA3AF" />
+                  </TouchableOpacity>
+                </View>
 
                 {/* Confirm Password Input */}
                 <Text style={styles.inputLabel}>Konfirmasi Kata Sandi Baru</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Ulangi kata sandi baru Anda"
-                  placeholderTextColor="#9CA3AF"
-                  secureTextEntry={true}
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                />
+                <View style={styles.passwordWrapper}>
+                  <TextInput
+                    style={[styles.input, styles.passwordInput]}
+                    placeholder="Ulangi kata sandi baru Anda"
+                    placeholderTextColor="#9CA3AF"
+                    secureTextEntry={!showConfirmPassword}
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                  />
+                  <TouchableOpacity
+                    style={styles.eyeButton}
+                    onPress={() => setShowConfirmPassword((prev) => !prev)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Feather name={showConfirmPassword ? 'eye-off' : 'eye'} size={20} color="#9CA3AF" />
+                  </TouchableOpacity>
+                </View>
 
                 {/* Form Buttons */}
                 <View style={styles.formButtonRow}>
@@ -607,8 +675,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   topHeader: {
-    height: Platform.OS === 'android' ? 60 + (RNStatusBar.currentHeight || 0) : 60,
-    paddingTop: Platform.OS === 'android' ? RNStatusBar.currentHeight || 0 : 0,
+    height: 60,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -764,6 +831,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#0F172A',
     marginBottom: 16,
+  },
+  passwordWrapper: {
+    position: 'relative',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  passwordInput: {
+    marginBottom: 0,
+    paddingRight: 46,
+  },
+  eyeButton: {
+    position: 'absolute',
+    right: 10,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    paddingHorizontal: 4,
   },
   formButtonRow: {
     flexDirection: 'row',
