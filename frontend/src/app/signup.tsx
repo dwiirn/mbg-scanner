@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   StyleSheet,
   Text,
@@ -10,39 +10,84 @@ import {
   Platform,
   ScrollView,
   Alert,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
-import { StatusBar } from 'expo-status-bar';
+  ActivityIndicator,
+} from "react-native";
+import { useRouter } from "expo-router";
+import { Feather } from "@expo/vector-icons";
+import { StatusBar } from "expo-status-bar";
+import axios from "axios";
+import { ENDPOINTS } from "../constants/api";
 
 export default function SignUpScreen() {
   const router = useRouter();
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [kitchenUnit, setKitchenUnit] = useState('');
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [kitchenUnit, setKitchenUnit] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [validationError, setValidationError] = useState("");
+  const [registrationSuccess, setRegistrationSuccess] = useState(false);
 
-  const handleRegister = () => {
+  const handleRegister = async () => {
+    setValidationError("");
+    setRegistrationSuccess(false);
+
+    // Inline validation
     if (!fullName || !email || !password || !kitchenUnit) {
-      Alert.alert('Perhatian', 'Silakan lengkapi semua kolom pendaftaran.');
+      setValidationError("Silakan lengkapi semua kolom pendaftaran.");
       return;
     }
-    Alert.alert(
-      'Sukses',
-      `Akun berhasil didaftarkan!\nNama: ${fullName}\nEmail: ${email}\nDapur: ${kitchenUnit}`
-    );
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setValidationError("Format email tidak valid.");
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const response = await axios.post(ENDPOINTS.SIGNUP, {
+        fullName,
+        email,
+        password,
+        kitchenUnit,
+      });
+
+      setRegistrationSuccess(true);
+
+      // Clear form
+      setFullName("");
+      setEmail("");
+      setPassword("");
+      setKitchenUnit("");
+
+      // Auto navigate to signin after 1.5 seconds
+      setTimeout(() => {
+        router.replace("/signin");
+      }, 1500);
+    } catch (error: any) {
+      console.error("Error saat pendaftaran:", error);
+      const errorMessage =
+        error.response?.data?.error ||
+        error.message ||
+        "Tidak dapat terhubung ke server.";
+      setValidationError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleLoginNavigation = () => {
     // Navigate back to Sign In
-    router.replace('/signin');
+    router.replace("/signin");
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardView}
       >
         <ScrollView
@@ -52,7 +97,9 @@ export default function SignUpScreen() {
           {/* Header Back Button */}
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => (router.canGoBack() ? router.back() : router.replace('/welcome'))}
+            onPress={() =>
+              router.canGoBack() ? router.back() : router.replace("/welcome")
+            }
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <Feather name="arrow-left" size={24} color="#0D0E10" />
@@ -112,21 +159,60 @@ export default function SignUpScreen() {
               placeholderTextColor="#9CA3AF"
               value={kitchenUnit}
               onChangeText={setKitchenUnit}
+              style={[styles.input, { marginBottom: 20 }]}
             />
+
+            {/* Error Message Inline validation */}
+            {validationError ? (
+              <View style={styles.errorContainer}>
+                <Feather name="alert-circle" size={16} color="#DC2626" />
+                <Text style={styles.errorText}>{validationError}</Text>
+              </View>
+            ) : null}
+
+            {/* Success Message Inline validation */}
+            {registrationSuccess ? (
+              <View style={styles.successContainer}>
+                <Feather name="check-circle" size={16} color="#16A34A" />
+                <Text style={styles.successText}>
+                  Pendaftaran berhasil! Mengalihkan ke halaman login...
+                </Text>
+              </View>
+            ) : null}
 
             {/* DAFTAR Button */}
             <TouchableOpacity
-              style={styles.registerButton}
+              style={[
+                styles.registerButton,
+                isLoading && styles.registerButtonDisabled,
+              ]}
               activeOpacity={0.8}
               onPress={handleRegister}
+              disabled={isLoading || registrationSuccess}
             >
-              <Feather name="log-in" size={20} color="#FFFFFF" style={styles.buttonIcon} />
-              <Text style={styles.registerButtonText}>DAFTAR</Text>
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <Feather
+                    name="log-in"
+                    size={20}
+                    color="#FFFFFF"
+                    style={styles.buttonIcon}
+                  />
+                  <Text style={styles.registerButtonText}>DAFTAR</Text>
+                </>
+              )}
             </TouchableOpacity>
 
             {/* Sign In Link */}
-            <TouchableOpacity style={styles.loginWrapper} onPress={handleLoginNavigation}>
-              <Text style={styles.loginText}>Sudah punya akun? Masuk di sini.</Text>
+            <TouchableOpacity
+              style={styles.loginWrapper}
+              onPress={handleLoginNavigation}
+            >
+              <Text style={styles.loginText}>
+                Sudah punya akun? Masuk di sini.
+              </Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -138,7 +224,7 @@ export default function SignUpScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
   },
   keyboardView: {
     flex: 1,
@@ -153,57 +239,57 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'flex-start',
+    justifyContent: "center",
+    alignItems: "flex-start",
     marginBottom: 20,
   },
   titleSection: {
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 24,
   },
   title: {
-    color: '#1E60D5', // Matches the blue title
+    color: "#1E60D5", // Matches the blue title
     fontSize: 26,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginBottom: 12,
   },
   subtitle: {
-    color: '#4A607A', // Slate-blue subtitle color
+    color: "#4A607A", // Slate-blue subtitle color
     fontSize: 14,
-    textAlign: 'center',
+    textAlign: "center",
     lineHeight: 20,
     paddingHorizontal: 12,
   },
   formContainer: {
-    width: '100%',
+    width: "100%",
   },
   label: {
-    color: '#0D0E10',
+    color: "#0D0E10",
     fontSize: 15,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginBottom: 8,
   },
   input: {
-    backgroundColor: '#F3F6FC', // Soft light gray-blue background
-    width: '100%',
+    backgroundColor: "#F3F6FC", // Soft light gray-blue background
+    width: "100%",
     height: 52,
     borderRadius: 12,
     paddingHorizontal: 16,
     fontSize: 15,
-    color: '#0D0E10',
+    color: "#0D0E10",
     marginBottom: 16,
   },
   registerButton: {
-    backgroundColor: '#1E60D5', // High premium blue background
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
+    backgroundColor: "#1E60D5", // High premium blue background
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
     height: 54,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#4DA1FF', // Matches light blue outline from mockup
-    shadowColor: '#1E60D5',
+    borderColor: "#4DA1FF", // Matches light blue outline from mockup
+    shadowColor: "#1E60D5",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 6,
@@ -211,21 +297,61 @@ const styles = StyleSheet.create({
     marginTop: 12,
     marginBottom: 24,
   },
+  registerButtonDisabled: {
+    backgroundColor: "#9CA3AF",
+    borderColor: "#D1D5DB",
+    shadowOpacity: 0,
+    elevation: 0,
+  },
   buttonIcon: {
     marginRight: 8,
   },
   registerButtonText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     letterSpacing: 0.5,
   },
   loginWrapper: {
-    alignItems: 'center',
+    alignItems: "center",
   },
   loginText: {
-    color: '#1E60D5',
+    color: "#1E60D5",
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
+  },
+  errorContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FEF2F2",
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#FCA5A5",
+    marginBottom: 16,
+  },
+  errorText: {
+    color: "#DC2626",
+    fontSize: 14,
+    fontWeight: "500",
+    marginLeft: 8,
+    flex: 1,
+  },
+  successContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F0FDF4",
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#86EFAC",
+    marginBottom: 16,
+  },
+  successText: {
+    color: "#16A34A",
+    fontSize: 14,
+    fontWeight: "500",
+    marginLeft: 8,
+    flex: 1,
   },
 });

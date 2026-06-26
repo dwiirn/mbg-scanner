@@ -2,6 +2,7 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
 import { Stack } from 'expo-router';
 import { useColorScheme, Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import CustomAlert from '../components/ui/custom-alert';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -13,12 +14,19 @@ export default function RootLayout() {
         <style
           dangerouslySetInnerHTML={{
             __html: `
+              @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+              
               html, body, #root {
                 margin: 0;
                 padding: 0;
                 overflow-x: hidden;
                 width: 100%;
                 height: 100%;
+              }
+              
+              /* Terapkan font Plus Jakarta Sans ke seluruh elemen KECUALI yang memiliki class/style font khusus (seperti Icon) */
+              *:not([class*="r-fontFamily-"]):not([style*="font-family"]):not([class*="Feather"]):not([class*="MaterialCommunityIcons"]):not([class*="Ionicons"]):not([class*="FontAwesome"]) {
+                font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
               }
             `,
           }}
@@ -34,6 +42,7 @@ export default function RootLayout() {
         <Stack.Screen name="detail" />
         <Stack.Screen name="profile" />
       </Stack>
+      <CustomAlert />
     </ThemeProvider>
   );
 }

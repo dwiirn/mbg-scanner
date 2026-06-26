@@ -18,9 +18,13 @@ import { StatusBar } from 'expo-status-bar';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { addHistoryItem } from '@/constants/history-store';
+import { useAuthStore } from '../store/auth-store';
+import { ENDPOINTS } from '../constants/api';
+import axios from 'axios';
 
 export default function CameraScreen() {
   const router = useRouter();
+  const { user, token } = useAuthStore();
   const [facing, setFacing] = useState<'back' | 'front'>('back');
   const [permission, requestPermission] = useCameraPermissions();
   
@@ -42,6 +46,8 @@ export default function CameraScreen() {
   };
 
   useEffect(() => {
+    let active = true;
+
     if (cameraState === 'scanning') {
       // Start looping animation
       scanLoop.current = Animated.loop(
@@ -60,40 +66,83 @@ export default function CameraScreen() {
       );
       scanLoop.current.start();
 
-      // Mock analysis timer (2.5 seconds)
-      const timer = setTimeout(() => {
-        scanLoop.current?.stop();
-        setCameraState('captured');
-        
-        // Randomly assign a mock result
-        const isFresh = Math.random() > 0.35;
-        setAnalysisResult(isFresh ? 'Segar' : 'Tidak Segar');
+      const runAnalysis = async () => {
+        // If we don't have a captured photo URI (e.g. running on web browser/demo camera bypass)
+        if (!capturedPhotoUri) {
+          // Simulate local delay and mock it
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          if (!active) return;
 
-        // Generate realistic varying RGB values centered around fresh/stale base colors
-        if (isFresh) {
-          setCurrentRgb({
-            r: Math.floor(210 + Math.random() * 10), // Varies between 210 and 220
-            g: Math.floor(155 + Math.random() * 10), // Varies between 155 and 165
-            b: Math.floor(138 + Math.random() * 10), // Varies between 138 and 148
-          });
-        } else {
-          setCurrentRgb({
-            r: Math.floor(175 + Math.random() * 10), // Varies between 175 and 185
-            g: Math.floor(125 + Math.random() * 10), // Varies between 125 and 135
-            b: Math.floor(115 + Math.random() * 10), // Varies between 115 and 125
-          });
+          scanLoop.current?.stop();
+          setCameraState('captured');
+          const isFresh = Math.random() > 0.35;
+          setAnalysisResult(isFresh ? 'Segar' : 'Tidak Segar');
+          setCurrentRgb(
+            isFresh
+              ? { r: 214, g: 160, b: 142 }
+              : { r: 180, g: 130, b: 120 }
+          );
+          return;
         }
-      }, 2500);
 
-      return () => clearTimeout(timer);
+        try {
+          const filename = capturedPhotoUri.split('/').pop() || 'scan.png';
+          const match = /\.(\w+)$/.exec(filename);
+          const type = match ? `image/${match[1]}` : `image/png`;
+
+          const formData = new FormData();
+          if (Platform.OS === 'web') {
+            const response = await fetch(capturedPhotoUri);
+            const blob = await response.blob();
+            formData.append('image', blob, filename);
+          } else {
+            formData.append('image', {
+              uri: capturedPhotoUri,
+              name: filename,
+              type,
+            } as any);
+          }
+
+          // Hit backend image analysis API
+          const response = await axios.post(ENDPOINTS.ANALYZE, formData, {
+            headers: {
+              'Content-Type': 'multipart/form-data',
+            },
+          });
+
+          if (!active) return;
+
+          const { status, r, g, b } = response.data;
+          scanLoop.current?.stop();
+          setAnalysisResult(status);
+          setCurrentRgb({ r, g, b });
+          setCameraState('captured');
+        } catch (error: any) {
+          console.error('Error analyzing image:', error);
+          if (!active) return;
+
+          scanLoop.current?.stop();
+          showAlert(
+            'Analisis Gagal',
+            error.response?.data?.error || error.message || 'Gagal menganalisis gambar.'
+          );
+          setCameraState('empty');
+        }
+      };
+
+      runAnalysis();
     }
-  }, [cameraState]);
+
+    return () => {
+      active = false;
+      if (scanLoop.current) {
+        scanLoop.current.stop();
+      }
+    };
+  }, [cameraState, capturedPhotoUri]);
 
   const handleTakePhoto = async () => {
     if (cameraState === 'empty') {
-      setCameraState('scanning');
-      setAnalysisResult(null);
-
       try {
         if (cameraRef.current) {
           const photo = await cameraRef.current.takePictureAsync({
@@ -102,12 +151,20 @@ export default function CameraScreen() {
           });
           if (photo && photo.uri) {
             setCapturedPhotoUri(photo.uri);
+            setCameraState('scanning');
+            setAnalysisResult(null);
           }
+        } else {
+          // If cameraRef is null (e.g. web/simulators), set uri to null to trigger mock analysis
+          setCapturedPhotoUri(null);
+          setCameraState('scanning');
+          setAnalysisResult(null);
         }
       } catch (error) {
         console.log('Error taking photo:', error);
-        // Fallback to mock image on simulators / web browsers without webcam access
         setCapturedPhotoUri(null);
+        setCameraState('scanning');
+        setAnalysisResult(null);
       }
     }
   };
@@ -119,15 +176,44 @@ export default function CameraScreen() {
     scanAnim.setValue(0);
   };
 
-  const handleSaveResult = () => {
-    // Save the exact dynamic RGB values generated for this photo
-    const finalRgb = `R: ${currentRgb.r}, G: ${currentRgb.g}, B: ${currentRgb.b}`;
+  const handleSaveResult = async () => {
+    const status = analysisResult || 'Segar';
 
-    addHistoryItem(analysisResult || 'Segar', finalRgb, 'Dwi Prasetyo');
+    if (token === 'demo-jwt-token-expired-24h' || !token) {
+      // Local demo fallback
+      const finalRgb = `R: ${currentRgb.r}, G: ${currentRgb.g}, B: ${currentRgb.b}`;
+      addHistoryItem(status, finalRgb, user?.fullName || 'Admin Demo');
+      showAlert('Sukses', 'Hasil analisis berhasil disimpan ke riwayat (Demo).', () => {
+        router.replace('/home');
+      });
+      return;
+    }
 
-    showAlert('Sukses', 'Hasil analisis berhasil disimpan ke riwayat.', () => {
-      router.replace('/home');
-    });
+    try {
+      await axios.post(
+        ENDPOINTS.SCANS,
+        {
+          title: 'Daging Ayam',
+          status: status,
+          r: currentRgb.r,
+          g: currentRgb.g,
+          b: currentRgb.b,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      showAlert('Sukses', 'Hasil analisis berhasil disimpan ke riwayat.', () => {
+        router.replace('/home');
+      });
+    } catch (error: any) {
+      console.error('Error saving scan:', error);
+      const errorMessage = error.response?.data?.error || error.message || 'Gagal menyimpan ke server.';
+      showAlert('Gagal Menyimpan', errorMessage);
+    }
   };
 
   const handlePickImage = async () => {
@@ -210,7 +296,7 @@ export default function CameraScreen() {
           <Feather name="arrow-left" size={24} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Pindai Daging</Text>
-        <View style={{ width: 40 }} /> {/* Spacer */}
+        <View style={{ width: 40 }} />
       </View>
 
       {/* Viewfinder Section (Frame 6 / Frame 7) */}
@@ -226,15 +312,22 @@ export default function CameraScreen() {
           <View style={styles.viewport}>
             {/* Live Camera Feed */}
             {cameraState === 'empty' && (
-              <CameraView
-                style={StyleSheet.absoluteFill}
-                facing={facing}
-                ref={cameraRef}
-              >
-                <View style={styles.emptyViewport}>
-                  <Text style={styles.emptyViewportText}>Posisikan objek dalam bingkai</Text>
+              Platform.OS === 'web' ? (
+                <View style={[StyleSheet.absoluteFill, styles.emptyViewport, { backgroundColor: '#1E293B' }]}>
+                  <Feather name="video" size={48} color="#94A3B8" style={{ marginBottom: 12 }} />
+                  <Text style={styles.emptyViewportText}>Kamera Web Demo (Klik Ambil Foto)</Text>
                 </View>
-              </CameraView>
+              ) : (
+                <CameraView
+                  style={StyleSheet.absoluteFill}
+                  facing={facing}
+                  ref={cameraRef}
+                >
+                  <View style={styles.emptyViewport}>
+                    <Text style={styles.emptyViewportText}>Posisikan objek dalam bingkai</Text>
+                  </View>
+                </CameraView>
+              )
             )}
 
             {/* Scanning Mode Layout */}
@@ -273,7 +366,6 @@ export default function CameraScreen() {
       {/* Below Viewfinder Alert Box / Results Modal */}
       <View style={styles.contentSection}>
         {cameraState !== 'captured' ? (
-          /* Info Instruction Box */
           <View style={styles.infoBox}>
             <View style={styles.infoIconBg}>
               <MaterialCommunityIcons name="lightbulb-on" size={22} color="#1E60D5" />
@@ -283,7 +375,6 @@ export default function CameraScreen() {
             </Text>
           </View>
         ) : (
-          /* Analysis Result Panel */
           <View style={styles.resultBox}>
             <Text style={styles.resultLabel}>Hasil Analisis:</Text>
             <View

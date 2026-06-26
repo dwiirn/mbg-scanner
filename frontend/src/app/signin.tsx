@@ -11,30 +11,84 @@ import {
   ScrollView,
   Alert,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
+import axios from 'axios';
+import { ENDPOINTS } from '../constants/api';
+import { useAuthStore } from '../store/auth-store';
+import { showAlert } from '../utils/alert';
 
 export default function SignInScreen() {
   const router = useRouter();
+  const setAuth = useAuthStore((state) => state.setAuth);
+  
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [validationError, setValidationError] = useState('');
+  const [loginSuccess, setLoginSuccess] = useState(false);
 
   // Forgot Password Modal States
   const [isForgotModalVisible, setIsForgotModalVisible] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [isSent, setIsSent] = useState(false);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
+    setValidationError('');
+    setLoginSuccess(false);
+
     if (!email || !password) {
-      Alert.alert('Perhatian', 'Silakan isi email dan kata sandi Anda.');
+      setValidationError('Silakan isi email dan kata sandi Anda.');
       return;
     }
+
+    // Local bypass for development / admin testing
     if (email.trim() === 'admin@gmail.com' && password === 'admin123') {
-      router.replace('/home');
-    } else {
-      Alert.alert('Gagal Masuk', 'Email atau kata sandi Anda salah.');
+      const mockUser = {
+        id: 999,
+        fullName: 'Admin Demo',
+        email: 'admin@gmail.com',
+        kitchenUnit: 'Unit Dapur Pusat',
+      };
+      const mockToken = 'demo-jwt-token-expired-24h';
+      setAuth(mockToken, mockUser);
+      setLoginSuccess(true);
+      setTimeout(() => {
+        router.replace('/home');
+      }, 1000);
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await axios.post(ENDPOINTS.SIGNIN, {
+        email,
+        password,
+      });
+
+      console.log('Respon login berhasil:', response.data);
+      const { token, user } = response.data;
+      
+      setAuth(token, user);
+      setLoginSuccess(true);
+
+      // Auto navigate to home after 1 second
+      setTimeout(() => {
+        router.replace('/home');
+      }, 1000);
+
+    } catch (error: any) {
+      console.error('Error saat login:', error);
+      const errorMessage =
+        error.response?.data?.error ||
+        error.message ||
+        'Tidak dapat terhubung ke server.';
+      setValidationError(errorMessage);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -104,25 +158,48 @@ export default function SignInScreen() {
               onChangeText={setPassword}
             />
 
-            {/* Forgot Password Link */}
-            <TouchableOpacity style={styles.forgotPasswordWrapper} onPress={handleForgotPassword}>
-              <Text style={styles.forgotPasswordText}>Lupa kata sandi?</Text>
-            </TouchableOpacity>
+             {/* Forgot Password Link */}
+             <TouchableOpacity style={styles.forgotPasswordWrapper} onPress={handleForgotPassword}>
+               <Text style={styles.forgotPasswordText}>Lupa kata sandi?</Text>
+             </TouchableOpacity>
 
-            {/* MASUK Button */}
-            <TouchableOpacity
-              style={styles.loginButton}
-              activeOpacity={0.8}
-              onPress={handleLogin}
-            >
-              <Feather name="log-in" size={20} color="#FFFFFF" style={styles.buttonIcon} />
-              <Text style={styles.loginButtonText}>MASUK</Text>
-            </TouchableOpacity>
+             {/* Error Message Inline validation */}
+             {validationError ? (
+               <View style={styles.errorContainer}>
+                 <Feather name="alert-circle" size={16} color="#DC2626" />
+                 <Text style={styles.errorText}>{validationError}</Text>
+               </View>
+             ) : null}
 
-            {/* Sign Up Link */}
-            <TouchableOpacity style={styles.registerWrapper} onPress={handleRegisterNavigation}>
-              <Text style={styles.registerText}>Belum punya akun? Daftar di sini.</Text>
-            </TouchableOpacity>
+             {/* Success Message Inline validation */}
+             {loginSuccess ? (
+               <View style={styles.successContainer}>
+                 <Feather name="check-circle" size={16} color="#16A34A" />
+                 <Text style={styles.successText}>Berhasil masuk! Mengalihkan ke Beranda...</Text>
+               </View>
+             ) : null}
+
+             {/* MASUK Button */}
+             <TouchableOpacity
+               style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
+               activeOpacity={0.8}
+               onPress={handleLogin}
+               disabled={isLoading || loginSuccess}
+             >
+               {isLoading ? (
+                 <ActivityIndicator size="small" color="#FFFFFF" />
+               ) : (
+                 <>
+                   <Feather name="log-in" size={20} color="#FFFFFF" style={styles.buttonIcon} />
+                   <Text style={styles.loginButtonText}>MASUK</Text>
+                 </>
+               )}
+             </TouchableOpacity>
+
+             {/* Sign Up Link */}
+             <TouchableOpacity style={styles.registerWrapper} onPress={handleRegisterNavigation}>
+               <Text style={styles.registerText}>Belum punya akun? Daftar di sini.</Text>
+             </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -170,13 +247,13 @@ export default function SignInScreen() {
                   activeOpacity={0.8}
                   onPress={() => {
                     if (!forgotEmail.trim()) {
-                      Alert.alert('Perhatian', 'Silakan masukkan email Anda.');
+                      showAlert('Perhatian', 'Silakan masukkan email Anda.');
                       return;
                     }
                     // Validate basic email format
                     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
                     if (!emailRegex.test(forgotEmail.trim())) {
-                      Alert.alert('Error', 'Format email tidak valid.');
+                      showAlert('Error', 'Format email tidak valid.');
                       return;
                     }
                     setIsSent(true);
@@ -298,6 +375,46 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 3,
     marginBottom: 24,
+  },
+  loginButtonDisabled: {
+    backgroundColor: '#9CA3AF',
+    borderColor: '#D1D5DB',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    marginBottom: 16,
+  },
+  errorText: {
+    color: '#DC2626',
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 8,
+    flex: 1,
+  },
+  successContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+    marginBottom: 16,
+  },
+  successText: {
+    color: '#16A34A',
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 8,
+    flex: 1,
   },
   buttonIcon: {
     marginRight: 8,

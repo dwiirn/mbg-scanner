@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -14,11 +14,26 @@ import {
 import { useRouter } from 'expo-router';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { HistoryItem, historyData } from '@/constants/history-store';
+import { useAuthStore } from '../store/auth-store';
+import { getAvatarUrl, ENDPOINTS } from '../constants/api';
+import axios from 'axios';
 
 type ActiveTab = 'beranda' | 'riwayat';
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { user, token } = useAuthStore();
+
+  const firstName = user?.fullName ? user.fullName.split(' ')[0] : 'User';
+  const kitchenUnit = user?.kitchenUnit || 'SPPG Kalisari 1';
+  
+  const getInitials = (name: string) => {
+    const parts = name.trim().split(/\s+/);
+    if (parts.length === 0) return 'US';
+    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+    return (parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase();
+  };
+  const initials = user?.fullName ? getInitials(user.fullName) : 'US';
 
   // Get current date in Indonesian format (e.g. Kamis, 25 Juni 2026)
   const getFormattedCurrentDate = () => {
@@ -47,6 +62,56 @@ export default function HomeScreen() {
   };
   const [activeTab, setActiveTab] = useState<ActiveTab>('beranda');
   const [filterMode, setFilterMode] = useState<'Semua' | 'Segar' | 'Tidak Segar'>('Semua');
+  const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const formatHistoryItems = (scans: any[]): HistoryItem[] => {
+    return scans.map((scan) => {
+      const d = new Date(scan.createdAt);
+      const pad = (n: number) => n.toString().padStart(2, '0');
+      const time = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+      const date = `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+
+      return {
+        id: scan.id.toString(),
+        title: scan.title,
+        time,
+        date,
+        status: scan.status as 'Segar' | 'Tidak Segar',
+        rgb: `R: ${scan.r}, G: ${scan.g}, B: ${scan.b}`,
+        staff: scan.User?.fullName || user?.fullName || 'Petugas',
+      };
+    });
+  };
+
+  const fetchScansHistory = async () => {
+    if (token === 'demo-jwt-token-expired-24h' || !token) {
+      setHistoryItems(historyData);
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const response = await axios.get(ENDPOINTS.SCANS, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const formatted = formatHistoryItems(response.data);
+      setHistoryItems(formatted);
+    } catch (error) {
+      console.error('Error fetching scan history:', error);
+      setHistoryItems(historyData);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchScansHistory();
+  }, [token]);
   
   // Date Range Picker States
   const [startDate, setStartDate] = useState<Date | null>(null);
@@ -154,7 +219,7 @@ export default function HomeScreen() {
       
       const isSelected = isStart || isEnd;
       const formattedDate = `${day} ${monthsShort[month]} ${year}`;
-      const hasHistory = historyData.some((item) => item.date === formattedDate);
+      const hasHistory = historyItems.some((item) => item.date === formattedDate);
       
       totalSlots.push(
         <TouchableOpacity
@@ -209,7 +274,7 @@ export default function HomeScreen() {
     const mockRgb = item.status === 'Segar' 
       ? 'R: 214, G: 160, B: 142' 
       : 'R: 180, G: 130, B: 120';
-    const mockStaff = 'Dwi Prasetyo';
+    const mockStaff = user?.fullName || 'Dwi Prasetyo';
 
     router.push({
       pathname: '/detail',
@@ -242,14 +307,18 @@ export default function HomeScreen() {
         <View style={styles.headerContainer}>
           <View style={styles.headerTopRow}>
             <View>
-              <Text style={styles.greetingText}>{getGreeting()}, Dwi!</Text>
+              <Text style={styles.greetingText}>{getGreeting()}, {firstName}!</Text>
               <Text style={styles.dateText}>{getFormattedCurrentDate()}</Text>
-              <Text style={styles.locationText}>SPPG Kalisari 1</Text>
+              <Text style={styles.locationText}>{kitchenUnit}</Text>
             </View>
 
             {/* User Avatar */}
             <TouchableOpacity style={styles.avatarButton} onPress={handleProfilePress}>
-              <Text style={styles.avatarText}>DW</Text>
+              {user?.pictureId ? (
+                <Image source={{ uri: getAvatarUrl(user.pictureId) }} style={styles.avatarImage} />
+              ) : (
+                <Text style={styles.avatarText}>{initials}</Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -289,7 +358,7 @@ export default function HomeScreen() {
                   setFilterMode('Semua');
                 }}
               >
-                <Text style={[styles.statsNumber, { color: '#1E60D5' }]}>{historyData.length}</Text>
+                <Text style={[styles.statsNumber, { color: '#1E60D5' }]}>{historyItems.length}</Text>
                 <Text style={styles.statsLabel}>Diperiksa</Text>
               </TouchableOpacity>
 
@@ -306,7 +375,7 @@ export default function HomeScreen() {
                 }}
               >
                 <Text style={[styles.statsNumber, { color: '#10B981' }]}>
-                  {historyData.filter((item) => item.status === 'Segar').length}
+                  {historyItems.filter((item) => item.status === 'Segar').length}
                 </Text>
                 <Text style={styles.statsLabel}>Segar</Text>
               </TouchableOpacity>
@@ -324,7 +393,7 @@ export default function HomeScreen() {
                 }}
               >
                 <Text style={[styles.statsNumber, { color: '#EF4444' }]}>
-                  {historyData.filter((item) => item.status === 'Tidak Segar').length}
+                  {historyItems.filter((item) => item.status === 'Tidak Segar').length}
                 </Text>
                 <Text style={styles.statsLabel}>Tidak Segar</Text>
               </TouchableOpacity>
@@ -355,7 +424,7 @@ export default function HomeScreen() {
 
             {/* History List (Recent 3 inspections) */}
             <View style={styles.historyList}>
-              {historyData.slice(0, 3).map((item) => (
+              {historyItems.slice(0, 3).map((item) => (
                 <HistoryRow key={item.id} item={item} onPress={() => handleItemPress(item)} />
               ))}
             </View>
@@ -455,7 +524,7 @@ export default function HomeScreen() {
 
             {/* List of Filtered Items */}
             <View style={styles.historyList}>
-              {historyData
+              {historyItems
                 .filter((item) => filterMode === 'Semua' || item.status === filterMode)
                 .filter((item) => {
                   if (!startDate) return true;
@@ -472,7 +541,7 @@ export default function HomeScreen() {
                 .map((item) => (
                   <HistoryRow key={item.id} item={item} onPress={() => handleItemPress(item)} />
                 ))}
-              {historyData
+              {historyItems
                 .filter((item) => filterMode === 'Semua' || item.status === filterMode)
                 .filter((item) => {
                   if (!startDate) return true;
@@ -643,6 +712,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 20,
   },
   avatarText: {
     color: '#FFFFFF',

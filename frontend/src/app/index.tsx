@@ -8,12 +8,13 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ScannerIcon } from '@/components/scanner-icon';
+import { useAuthStore } from '@/store/auth-store';
 
 export default function SplashScreen() {
   const router = useRouter();
 
   useEffect(() => {
-    // Automatically navigate to Welcome page after 2.5 seconds
+    // Automatically navigate after 2.5 seconds
     const timer = setTimeout(() => {
       handleNavigate();
     }, 2500);
@@ -22,7 +23,12 @@ export default function SplashScreen() {
   }, []);
 
   const handleNavigate = () => {
-    router.replace('/welcome');
+    const isAuthenticated = useAuthStore.getState().isAuthenticated;
+    if (isAuthenticated) {
+      router.replace('/home');
+    } else {
+      router.replace('/welcome');
+    }
   };
 
   return (
