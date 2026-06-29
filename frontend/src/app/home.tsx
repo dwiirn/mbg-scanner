@@ -66,6 +66,7 @@ export default function HomeScreen() {
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
@@ -95,6 +96,7 @@ export default function HomeScreen() {
   const fetchScansHistory = async () => {
     if (token === 'demo-jwt-token-expired-24h' || !token) {
       setHistoryItems(historyData);
+      setTotalCount(historyData.length);
       setHasMore(false); // data demo tidak berpaginasi
       setIsLoading(false);
       return;
@@ -109,49 +111,50 @@ export default function HomeScreen() {
       const formatted = formatHistoryItems(response.data);
       setHistoryItems(formatted);
       setPage(1);
+
+      const totalHeader = response.headers['x-total-count'];
+      const total = totalHeader ? parseInt(totalHeader, 10) : response.data.length;
+      setTotalCount(total);
+
       setHasMore(response.data.length === PAGE_SIZE);
     } catch (error) {
       console.error('Error fetching scan history:', error);
       setHistoryItems(historyData);
+      setTotalCount(historyData.length);
       setHasMore(false);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const loadMoreScans = async () => {
-    // Hentikan jika sedang memuat, tidak ada lagi, atau mode demo
-    if (isLoadingMore || !hasMore || token === 'demo-jwt-token-expired-24h' || !token) {
-      return;
-    }
+  const handlePageChange = async (newPage: number) => {
+    if (newPage < 1 || token === 'demo-jwt-token-expired-24h' || !token) return;
 
     try {
-      setIsLoadingMore(true);
-      const nextPage = page + 1;
+      setIsLoading(true);
       const response = await axios.get(ENDPOINTS.SCANS, {
         headers: { Authorization: `Bearer ${token}` },
-        params: { page: nextPage, limit: PAGE_SIZE },
+        params: { page: newPage, limit: PAGE_SIZE },
       });
       const formatted = formatHistoryItems(response.data);
-      setHistoryItems((prev) => [...prev, ...formatted]);
-      setPage(nextPage);
+
+      const totalHeader = response.headers['x-total-count'];
+      const total = totalHeader ? parseInt(totalHeader, 10) : response.data.length;
+      setTotalCount(total);
+      
+      if (formatted.length === 0 && newPage > 1) {
+        setHasMore(false);
+        setIsLoading(false);
+        return;
+      }
+
+      setHistoryItems(formatted);
+      setPage(newPage);
       setHasMore(response.data.length === PAGE_SIZE);
     } catch (error) {
-      console.error('Error loading more scans:', error);
+      console.error('Error changing page:', error);
     } finally {
-      setIsLoadingMore(false);
-    }
-  };
-
-  // Deteksi scroll mendekati bawah untuk memicu fetch halaman berikutnya
-  const handleScroll = ({ nativeEvent }: any) => {
-    if (activeTab !== 'riwayat') return;
-    const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
-    const paddingToBottom = 120;
-    const closeToBottom =
-      layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom;
-    if (closeToBottom) {
-      loadMoreScans();
+      setIsLoading(false);
     }
   };
 
@@ -337,6 +340,66 @@ export default function HomeScreen() {
     });
   };
 
+  const renderPageButton = (i: number) => (
+    <TouchableOpacity
+      key={i}
+      style={[
+        styles.pageNumberButton,
+        page === i && styles.pageNumberButtonActive
+      ]}
+      onPress={() => handlePageChange(i)}
+      activeOpacity={0.7}
+    >
+      <Text style={[
+        styles.pageNumberText,
+        page === i && styles.pageNumberTextActive
+      ]}>
+        {i}
+      </Text>
+    </TouchableOpacity>
+  );
+
+  const renderPageNumbers = () => {
+    const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+    if (totalPages <= 1) return null;
+
+    const pages = [];
+    const maxVisiblePages = 5;
+
+    if (totalPages <= maxVisiblePages) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(renderPageButton(i));
+      }
+    } else {
+      pages.push(renderPageButton(1));
+      
+      if (page > 3) {
+        pages.push(
+          <Text key="dots-1" style={styles.pageDots}>...</Text>
+        );
+      }
+
+      const start = Math.max(2, page - 1);
+      const end = Math.min(totalPages - 1, page + 1);
+
+      for (let i = start; i <= end; i++) {
+        if (i > 1 && i < totalPages) {
+          pages.push(renderPageButton(i));
+        }
+      }
+
+      if (page < totalPages - 2) {
+        pages.push(
+          <Text key="dots-2" style={styles.pageDots}>...</Text>
+        );
+      }
+
+      pages.push(renderPageButton(totalPages));
+    }
+
+    return pages;
+  };
+
   return (
     <SafeAreaView 
       style={[
@@ -387,8 +450,6 @@ export default function HomeScreen() {
           activeTab === 'riwayat' && { backgroundColor: '#FFFFFF', paddingTop: 16 },
         ]}
         bounces={true}
-        onScroll={handleScroll}
-        scrollEventThrottle={400}
       >
         {activeTab === 'beranda' ? (
           <>
@@ -473,9 +534,13 @@ export default function HomeScreen() {
 
             {/* History List (Recent 3 inspections) */}
             <View style={styles.historyList}>
-              {historyItems.slice(0, 3).map((item) => (
-                <HistoryRow key={item.id} item={item} onPress={() => handleItemPress(item)} />
-              ))}
+              {historyItems.length === 0 ? (
+                <Text style={styles.emptyListText}>Tidak ada riwayat</Text>
+              ) : (
+                historyItems.slice(0, 3).map((item) => (
+                  <HistoryRow key={item.id} item={item} onPress={() => handleItemPress(item)} />
+                ))
+              )}
             </View>
           </>
         ) : (
@@ -604,17 +669,41 @@ export default function HomeScreen() {
                   }
                   return true;
                 }).length === 0 && (
-                <Text style={styles.emptyListText}>Tidak ada riwayat pada rentang tanggal dan kondisi ini.</Text>
+                <Text style={styles.emptyListText}>Tidak ada riwayat</Text>
               )}
+             </View>
 
-              {/* Indikator memuat halaman berikutnya */}
-              {isLoadingMore && (
-                <ActivityIndicator size="small" color="#1E60D5" style={{ marginVertical: 16 }} />
-              )}
-              {!hasMore && historyItems.length > 0 && (
-                <Text style={styles.endOfListText}>Tidak ada riwayat lagi.</Text>
-              )}
-            </View>
+             {/* Pagination Controls */}
+             {token !== 'demo-jwt-token-expired-24h' && totalCount > PAGE_SIZE && (
+               <View style={styles.paginationRow}>
+                 {/* Prev Button */}
+                 <TouchableOpacity
+                   style={[styles.pageButton, page === 1 && styles.pageButtonDisabled]}
+                   disabled={page === 1}
+                   onPress={() => handlePageChange(page - 1)}
+                   activeOpacity={0.7}
+                 >
+                   <Feather name="chevron-left" size={16} color={page === 1 ? '#9CA3AF' : '#1E60D5'} />
+                   <Text style={[styles.pageButtonText, page === 1 && styles.pageButtonTextDisabled]}>Prev</Text>
+                 </TouchableOpacity>
+
+                 {/* Page Numbers */}
+                 <View style={styles.pageNumbersContainer}>
+                   {renderPageNumbers()}
+                 </View>
+
+                 {/* Next Button */}
+                 <TouchableOpacity
+                   style={[styles.pageButton, page >= Math.ceil(totalCount / PAGE_SIZE) && styles.pageButtonDisabled]}
+                   disabled={page >= Math.ceil(totalCount / PAGE_SIZE)}
+                   onPress={() => handlePageChange(page + 1)}
+                   activeOpacity={0.7}
+                 >
+                   <Text style={[styles.pageButtonText, page >= Math.ceil(totalCount / PAGE_SIZE) && styles.pageButtonTextDisabled]}>Next</Text>
+                   <Feather name="chevron-right" size={16} color={page >= Math.ceil(totalCount / PAGE_SIZE) ? '#9CA3AF' : '#1E60D5'} />
+                 </TouchableOpacity>
+               </View>
+             )}
           </>
         )}
       </ScrollView>
@@ -1171,5 +1260,66 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#1E60D5',
     fontWeight: 'bold',
+  },
+  paginationRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginVertical: 20,
+    paddingHorizontal: 8,
+  },
+  pageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EBF3FF',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    gap: 4,
+  },
+  pageButtonDisabled: {
+    backgroundColor: '#F1F5F9',
+  },
+  pageButtonText: {
+    fontSize: 13,
+    color: '#1E60D5',
+    fontWeight: 'bold',
+  },
+  pageButtonTextDisabled: {
+    color: '#9CA3AF',
+  },
+  pageNumbersContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  pageNumberButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  pageNumberButtonActive: {
+    backgroundColor: '#1E60D5',
+    borderColor: '#1E60D5',
+  },
+  pageNumberText: {
+    fontSize: 13,
+    color: '#0F172A',
+    fontWeight: '600',
+  },
+  pageNumberTextActive: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+  },
+  pageDots: {
+    fontSize: 14,
+    color: '#64748B',
+    fontWeight: 'bold',
+    paddingHorizontal: 4,
   },
 });

@@ -40,6 +40,7 @@ func main() {
 		AllowOrigins: "*",
 		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
 		AllowMethods: "GET, POST, PUT, DELETE, OPTIONS",
+		ExposeHeaders: "X-Total-Count",
 	}))
 
 	// Setup API endpoints routes

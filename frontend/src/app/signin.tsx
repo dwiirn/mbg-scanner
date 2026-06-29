@@ -125,7 +125,7 @@ export default function SignInScreen() {
 
           {/* Main Title Section */}
           <View style={styles.titleSection}>
-            <Text style={styles.title}>Sign In</Text>
+            <Text style={styles.title}>Masuk</Text>
             <Text style={styles.subtitle}>
               Silakan masuk menggunakan akun yang telah terdaftar.
             </Text>

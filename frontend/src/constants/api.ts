@@ -1,8 +1,7 @@
 import { Platform } from 'react-native';
 
 // Silakan ubah IP ini ke alamat IP komputer lokal Anda jika menggunakan HP fisik untuk pengujian
-// Emulator Android menggunakan '10.0.2.2' sebagai jembatan ke localhost PC
-const LOCAL_IP = '192.168.100.178'; 
+const LOCAL_IP = '10.0.2.2';
 const DEV_PORT = '5000';
 
 export const API_URL = Platform.select({

@@ -327,6 +327,7 @@ export default function CameraScreen() {
                     style={StyleSheet.absoluteFill}
                     facing={facing}
                     ref={cameraRef}
+                    autofocus="on"
                   />
                   {/* Overlay rendered as sibling (CameraView no longer supports children) */}
                   <View
@@ -454,17 +455,17 @@ export default function CameraScreen() {
         <View style={styles.bottomBar}>
           {/* Left: Gallery preview thumbnail - picks actual device photo */}
           <TouchableOpacity
-            style={styles.galleryPreview}
+            style={[
+              styles.galleryPreview,
+              !capturedPhotoUri && { justifyContent: 'center', alignItems: 'center' }
+            ]}
             activeOpacity={0.8}
             onPress={handlePickImage}
           >
             {capturedPhotoUri ? (
               <Image source={{ uri: capturedPhotoUri }} style={styles.galleryThumbnail} />
             ) : (
-              <Image
-                source={require('@/assets/images/raw_chicken.jpg')}
-                style={styles.galleryThumbnail}
-              />
+              <Feather name="image" size={20} color="#FFFFFF" />
             )}
           </TouchableOpacity>
 
@@ -585,21 +586,20 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   viewfinderWrapper: {
-    flex: 5,
-    justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 32,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
   },
   viewfinderContainer: {
     width: '100%',
-    height: 350,
+    height: 310,
     position: 'relative',
     justifyContent: 'center',
     alignItems: 'center',
   },
   viewport: {
-    width: '90%',
-    height: '90%',
+    width: '100%',
+    height: '100%',
     borderRadius: 24,
     backgroundColor: '#334155',
     overflow: 'hidden',
@@ -686,8 +686,9 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 18,
   },
   contentSection: {
-    flex: 2,
-    justifyContent: 'center',
+    flex: 1,
+    justifyContent: 'flex-start',
+    paddingTop: 10,
     paddingHorizontal: 24,
   },
   infoBox: {

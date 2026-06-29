@@ -172,6 +172,15 @@ func GetScans(c *fiber.Ctx) error {
 	offset := (page - 1) * limit
 
 	var scans []models.Scan
+	// Count total scans for pagination calculation
+	var total int64
+	if err := config.DB.Model(&models.Scan{}).Where("user_id = ?", uid).Count(&total).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Gagal menghitung data riwayat pemeriksaan",
+		})
+	}
+	c.Set("X-Total-Count", fmt.Sprintf("%d", total))
+
 	// Retrieve scans sorted by created_at descending (newest first)
 	if err := config.DB.Preload("User").Where("user_id = ?", uid).
 		Order("created_at desc").Limit(limit).Offset(offset).Find(&scans).Error; err != nil {

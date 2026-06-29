@@ -148,7 +148,7 @@ export default function WelcomeScreen() {
               activeOpacity={0.8}
               onPress={handleSignIn}
             >
-              <Text style={styles.signInButtonText}>Sign in</Text>
+              <Text style={styles.signInButtonText}>Masuk</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -156,7 +156,7 @@ export default function WelcomeScreen() {
               activeOpacity={0.8}
               onPress={handleSignUp}
             >
-              <Text style={styles.signUpButtonText}>Sign up</Text>
+              <Text style={styles.signUpButtonText}>Daftar</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -175,7 +175,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   headerSection: {
-    height: 240, // Use fixed height to ensure content is fully visible on any screen size
+    height: 320, // Increased from 240 to balance visual proportions and eliminate empty white space
     width: '100%',
   },
   backgroundImage: {
@@ -285,7 +285,7 @@ const styles = StyleSheet.create({
   },
   buttonsWrapper: {
     width: '100%',
-    marginTop: 'auto', // Pushes buttons to the bottom of the card
+    marginTop: 24,
     paddingTop: 12,
   },
   signInButton: {
@@ -308,16 +308,18 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   signUpButton: {
-    backgroundColor: '#F3F6FC', // Soft pastel blue-gray background
+    backgroundColor: '#FFFFFF', // Pure white background
+    borderWidth: 2,             // 2px solid border
+    borderColor: '#1E60D5',     // Matches the primary brand blue
     width: '100%',
-    paddingVertical: 14,
+    paddingVertical: 13,        // Adjusted padding to account for 2px border height
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
   signUpButtonText: {
-    color: '#1E60D5', // Matches sign in button background
+    color: '#1E60D5',           // Matching blue text color
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: 'bold',         // Bold text for high legibility
   },
 });

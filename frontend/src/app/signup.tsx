@@ -108,7 +108,7 @@ export default function SignUpScreen() {
 
           {/* Main Title Section */}
           <View style={styles.titleSection}>
-            <Text style={styles.title}>Sign Up</Text>
+            <Text style={styles.title}>Daftar</Text>
             <Text style={styles.subtitle}>
               Silakan buat akun Anda untuk memulai.
             </Text>
