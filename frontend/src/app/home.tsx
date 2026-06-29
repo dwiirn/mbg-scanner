@@ -4,18 +4,19 @@ import {
   Text,
   View,
   TouchableOpacity,
-  SafeAreaView,
   ScrollView,
   StatusBar,
   Platform,
   Image,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { HistoryItem, historyData } from '@/constants/history-store';
 import { useAuthStore } from '../store/auth-store';
-import { getAvatarUrl, ENDPOINTS } from '../constants/api';
+import { getAvatarUrl, getUploadUrl, ENDPOINTS } from '../constants/api';
 import axios from 'axios';
 
 type ActiveTab = 'beranda' | 'riwayat';
@@ -64,6 +65,9 @@ export default function HomeScreen() {
   const [filterMode, setFilterMode] = useState<'Semua' | 'Segar' | 'Tidak Segar'>('Semua');
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   const formatHistoryItems = (scans: any[]): HistoryItem[] => {
     return scans.map((scan) => {
@@ -81,13 +85,17 @@ export default function HomeScreen() {
         status: scan.status as 'Segar' | 'Tidak Segar',
         rgb: `R: ${scan.r}, G: ${scan.g}, B: ${scan.b}`,
         staff: scan.User?.fullName || user?.fullName || 'Petugas',
+        image: scan.image || undefined,
       };
     });
   };
 
+  const PAGE_SIZE = 10;
+
   const fetchScansHistory = async () => {
     if (token === 'demo-jwt-token-expired-24h' || !token) {
       setHistoryItems(historyData);
+      setHasMore(false); // data demo tidak berpaginasi
       setIsLoading(false);
       return;
     }
@@ -95,17 +103,55 @@ export default function HomeScreen() {
     try {
       setIsLoading(true);
       const response = await axios.get(ENDPOINTS.SCANS, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
+        params: { page: 1, limit: PAGE_SIZE },
       });
       const formatted = formatHistoryItems(response.data);
       setHistoryItems(formatted);
+      setPage(1);
+      setHasMore(response.data.length === PAGE_SIZE);
     } catch (error) {
       console.error('Error fetching scan history:', error);
       setHistoryItems(historyData);
+      setHasMore(false);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadMoreScans = async () => {
+    // Hentikan jika sedang memuat, tidak ada lagi, atau mode demo
+    if (isLoadingMore || !hasMore || token === 'demo-jwt-token-expired-24h' || !token) {
+      return;
+    }
+
+    try {
+      setIsLoadingMore(true);
+      const nextPage = page + 1;
+      const response = await axios.get(ENDPOINTS.SCANS, {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { page: nextPage, limit: PAGE_SIZE },
+      });
+      const formatted = formatHistoryItems(response.data);
+      setHistoryItems((prev) => [...prev, ...formatted]);
+      setPage(nextPage);
+      setHasMore(response.data.length === PAGE_SIZE);
+    } catch (error) {
+      console.error('Error loading more scans:', error);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
+  // Deteksi scroll mendekati bawah untuk memicu fetch halaman berikutnya
+  const handleScroll = ({ nativeEvent }: any) => {
+    if (activeTab !== 'riwayat') return;
+    const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+    const paddingToBottom = 120;
+    const closeToBottom =
+      layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom;
+    if (closeToBottom) {
+      loadMoreScans();
     }
   };
 
@@ -286,6 +332,7 @@ export default function HomeScreen() {
         status: item.status,
         rgb: mockRgb,
         staff: mockStaff,
+        image: item.image,
       },
     });
   };
@@ -315,7 +362,7 @@ export default function HomeScreen() {
             {/* User Avatar */}
             <TouchableOpacity style={styles.avatarButton} onPress={handleProfilePress}>
               {user?.pictureId ? (
-                <Image source={{ uri: getAvatarUrl(user.pictureId) }} style={styles.avatarImage} />
+                <Image source={{ uri: getAvatarUrl(user.pictureId) || undefined }} style={styles.avatarImage} />
               ) : (
                 <Text style={styles.avatarText}>{initials}</Text>
               )}
@@ -340,6 +387,8 @@ export default function HomeScreen() {
           activeTab === 'riwayat' && { backgroundColor: '#FFFFFF', paddingTop: 16 },
         ]}
         bounces={true}
+        onScroll={handleScroll}
+        scrollEventThrottle={400}
       >
         {activeTab === 'beranda' ? (
           <>
@@ -557,6 +606,14 @@ export default function HomeScreen() {
                 }).length === 0 && (
                 <Text style={styles.emptyListText}>Tidak ada riwayat pada rentang tanggal dan kondisi ini.</Text>
               )}
+
+              {/* Indikator memuat halaman berikutnya */}
+              {isLoadingMore && (
+                <ActivityIndicator size="small" color="#1E60D5" style={{ marginVertical: 16 }} />
+              )}
+              {!hasMore && historyItems.length > 0 && (
+                <Text style={styles.endOfListText}>Tidak ada riwayat lagi.</Text>
+              )}
             </View>
           </>
         )}
@@ -628,10 +685,10 @@ function HistoryRow({ item, onPress }: { item: HistoryItem; onPress?: () => void
       activeOpacity={0.7}
       onPress={onPress}
     >
-      {/* Real Chicken Image Thumbnail */}
+      {/* Thumbnail: gambar hasil scan dari uploads, fallback ke gambar default */}
       <View style={styles.historyImageContainer}>
         <Image
-          source={require('@/assets/images/raw_chicken.jpg')}
+          source={item.image ? { uri: getUploadUrl(item.image)! } : require('@/assets/images/raw_chicken.jpg')}
           style={styles.historyThumbnail}
           resizeMode="cover"
         />
@@ -674,7 +731,7 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
     paddingHorizontal: 20, // Adjusted from 24 to 20 to align horizontally with the page contents
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 16 : 24,
+    paddingTop: 24,
     paddingBottom: 32,
   },
   headerTopRow: {
@@ -952,6 +1009,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontStyle: 'italic',
     paddingVertical: 16,
+  },
+  endOfListText: {
+    color: '#94A3B8',
+    fontSize: 13,
+    textAlign: 'center',
+    paddingVertical: 12,
   },
   filterLabel: {
     color: '#64748B',

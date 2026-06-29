@@ -5,7 +5,6 @@ import {
   View,
   TextInput,
   TouchableOpacity,
-  SafeAreaView,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -13,6 +12,7 @@ import {
   Modal,
   ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
@@ -27,6 +27,7 @@ export default function SignInScreen() {
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [validationError, setValidationError] = useState('');
   const [loginSuccess, setLoginSuccess] = useState(false);
@@ -147,16 +148,25 @@ export default function SignInScreen() {
 
             {/* Password Field */}
             <Text style={styles.label}>Password</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Masukkan kata sandi Anda"
-              placeholderTextColor="#9CA3AF"
-              secureTextEntry={true}
-              autoCapitalize="none"
-              autoCorrect={false}
-              value={password}
-              onChangeText={setPassword}
-            />
+            <View style={styles.passwordWrapper}>
+              <TextInput
+                style={[styles.input, styles.passwordInput]}
+                placeholder="Masukkan kata sandi Anda"
+                placeholderTextColor="#9CA3AF"
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+                value={password}
+                onChangeText={setPassword}
+              />
+              <TouchableOpacity
+                style={styles.eyeButton}
+                onPress={() => setShowPassword((prev) => !prev)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Feather name={showPassword ? 'eye-off' : 'eye'} size={20} color="#9CA3AF" />
+              </TouchableOpacity>
+            </View>
 
              {/* Forgot Password Link */}
              <TouchableOpacity style={styles.forgotPasswordWrapper} onPress={handleForgotPassword}>
@@ -349,6 +359,23 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#0D0E10',
     marginBottom: 16,
+  },
+  passwordWrapper: {
+    position: 'relative',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  passwordInput: {
+    marginBottom: 0,
+    paddingRight: 48,
+  },
+  eyeButton: {
+    position: 'absolute',
+    right: 12,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    paddingHorizontal: 4,
   },
   forgotPasswordWrapper: {
     alignSelf: 'flex-end',

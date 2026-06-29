@@ -6,6 +6,7 @@ export interface HistoryItem {
   status: 'Segar' | 'Tidak Segar';
   rgb: string;
   staff: string;
+  image?: string; // URI lokal atau nama file di uploads backend
 }
 
 // In-memory global store initialized with 10 mock items
@@ -103,12 +104,12 @@ export const historyData: HistoryItem[] = [
 ];
 
 // Helper to push a new scan item to the beginning of the list
-export const addHistoryItem = (status: 'Segar' | 'Tidak Segar', rgb: string, staff: string) => {
+export const addHistoryItem = (status: 'Segar' | 'Tidak Segar', rgb: string, staff: string, image?: string) => {
   const now = new Date();
-  
+
   const pad = (n: number) => n.toString().padStart(2, '0');
   const time = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
-  
+
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
   const date = `${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
 
@@ -120,6 +121,7 @@ export const addHistoryItem = (status: 'Segar' | 'Tidak Segar', rgb: string, sta
     status,
     rgb,
     staff,
+    image,
   };
 
   historyData.unshift(newItem); // Newest first

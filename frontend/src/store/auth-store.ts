@@ -7,6 +7,7 @@ export interface User {
   fullName: string;
   email: string;
   kitchenUnit: string;
+  pictureId?: string;
 }
 
 interface AuthState {
