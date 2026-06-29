@@ -7,8 +7,9 @@ const DEV_PORT = '5000';
 
 export const API_URL = Platform.select({
   android: `http://${LOCAL_IP}:${DEV_PORT}`,
-  default: `http://localhost:${DEV_PORT}`,
+  default: `http://127.0.0.1:${DEV_PORT}`,
 });
+
 
 export const ENDPOINTS = {
   SIGNUP: `${API_URL}/signup`,

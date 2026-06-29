@@ -74,9 +74,9 @@ export default function ProfileScreen() {
       } catch (error: any) {
         console.error('Error fetching profile:', error);
         
-        // Check if 401 Unauthorized (expired token)
-        if (error.response?.status === 401) {
-          showAlert('Sesi Berakhir', 'Sesi login Anda telah kedaluwarsa. Silakan masuk kembali.', () => {
+        // Check if 401 Unauthorized (expired token) or 404 Not Found (user no longer exists)
+        if (error.response?.status === 401 || error.response?.status === 404) {
+          showAlert('Sesi Berakhir', 'Sesi login Anda telah kedaluwarsa atau tidak valid. Silakan masuk kembali.', () => {
             clearAuth();
             router.replace('/signin');
           });

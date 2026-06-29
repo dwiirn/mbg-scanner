@@ -36,7 +36,11 @@ func main() {
 	app.Static("/uploads", "./uploads")
 
 	// Use CORS middleware to allow connection from Expo/React Native frontend
-	app.Use(cors.New())
+	app.Use(cors.New(cors.Config{
+		AllowOrigins: "*",
+		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
+		AllowMethods: "GET, POST, PUT, DELETE, OPTIONS",
+	}))
 
 	// Setup API endpoints routes
 	routes.SetupRoutes(app)

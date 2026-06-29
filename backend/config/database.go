@@ -49,7 +49,7 @@ func ConnectDB() {
 	// Create database if not exists
 	_, err = sqlDB.Exec(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci", dbName))
 	if err != nil {
-		log.Fatalf("Gagal membuat database %s: %v", dbName)
+		log.Fatalf("Gagal membuat database %s: %v", dbName, err)
 	}
 
 	// 2. Connect via GORM to the database schema
