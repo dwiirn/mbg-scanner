@@ -26,6 +26,7 @@ func SetupRoutes(app *fiber.App) {
 
 	// Scan History API Routes
 	app.Get("/scans", middleware.AuthRequired, controllers.GetScans)
+	app.Get("/scans/stats", middleware.AuthRequired, controllers.GetScanStats)
 	app.Post("/scans", middleware.AuthRequired, controllers.CreateScan)
 
 	// Scanning Analysis API Route

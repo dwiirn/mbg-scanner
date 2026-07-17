@@ -72,7 +72,7 @@ export default function ProfileScreen() {
         // Sync Zustand store
         useAuthStore.setState({ user: response.data });
       } catch (error: any) {
-        console.error('Error fetching profile:', error);
+        console.warn('Error fetching profile:', error);
         
         // Check if 401 Unauthorized (expired token) or 404 Not Found (user no longer exists)
         if (error.response?.status === 401 || error.response?.status === 404) {

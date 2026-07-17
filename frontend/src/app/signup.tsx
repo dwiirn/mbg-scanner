@@ -184,7 +184,7 @@ export default function SignUpScreen() {
               <View style={styles.successContainer}>
                 <Feather name="check-circle" size={16} color="#16A34A" />
                 <Text style={styles.successText}>
-                  Pendaftaran berhasil! Mengalihkan ke halaman login...
+                  Pendaftaran berhasil! Mengalihkan...
                 </Text>
               </View>
             ) : null}

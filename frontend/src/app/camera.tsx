@@ -120,7 +120,6 @@ export default function CameraScreen() {
           setScanImage(image || null);
           setCameraState('captured');
         } catch (error: any) {
-          console.error('Error analyzing image:', error);
           if (!active) return;
 
           scanLoop.current?.stop();
@@ -381,7 +380,7 @@ export default function CameraScreen() {
               <MaterialCommunityIcons name="lightbulb-on" size={22} color="#1E60D5" />
             </View>
             <Text style={styles.infoText}>
-              Letakkan objek pada pencahayaan terang merata, serta hindari tertutup bayangan
+              Letakkan objek pada alas polos berwarna putih dengan pencahayaan terang merata, serta hindari tertutup bayangan
             </Text>
           </View>
         ) : (

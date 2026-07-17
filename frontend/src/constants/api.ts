@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 
 // Silakan ubah IP ini ke alamat IP komputer lokal Anda jika menggunakan HP fisik untuk pengujian
-const LOCAL_IP = '10.0.2.2';
+const LOCAL_IP = '192.168.110.11';
 const DEV_PORT = '5000';
 
 export const API_URL = Platform.select({
@@ -17,6 +17,7 @@ export const ENDPOINTS = {
   UPLOAD_AVATAR: `${API_URL}/profile/avatar`,
   ANALYZE: `${API_URL}/analyze`,
   SCANS: `${API_URL}/scans`,
+  STATS: `${API_URL}/scans/stats`,
   UPDATE_PASSWORD: `${API_URL}/profile/password`,
 };
 

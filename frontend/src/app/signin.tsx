@@ -181,13 +181,13 @@ export default function SignInScreen() {
                </View>
              ) : null}
 
-             {/* Success Message Inline validation */}
-             {loginSuccess ? (
-               <View style={styles.successContainer}>
-                 <Feather name="check-circle" size={16} color="#16A34A" />
-                 <Text style={styles.successText}>Berhasil masuk! Mengalihkan ke Beranda...</Text>
-               </View>
-             ) : null}
+              {/* Success Message Inline validation */}
+              {loginSuccess ? (
+                <View style={styles.successContainer}>
+                  <Feather name="check-circle" size={16} color="#16A34A" />
+                  <Text style={styles.successText}>Masuk berhasil! Menyiapkan Beranda...</Text>
+                </View>
+              ) : null}
 
              {/* MASUK Button */}
              <TouchableOpacity

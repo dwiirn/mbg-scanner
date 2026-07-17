@@ -7,6 +7,7 @@ import {
   Image,
   ScrollView,
   Platform,
+  Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -22,6 +23,25 @@ export default function DetailScreen() {
     router.replace('/home');
   };
 
+  // Function to share inspection details using native share dialog
+  const handleShare = async () => {
+    try {
+      const message = `[MBG Scanner - Hasil Pemeriksaan Daging Ayam]
+Nama Objek: ${title}
+Status: ${status.toUpperCase()}
+Petugas: ${staff}
+Waktu Pindai: ${time} · ${date}
+Nilai RGB: ${rgb}
+Lokasi: ${location}`;
+
+      await Share.share({
+        message,
+      });
+    } catch (error: any) {
+      console.error('Error sharing detail:', error);
+    }
+  };
+
   // Extract navigation parameters or use default mock values
   const title = (params.title as string) || 'Daging Ayam';
   const status = (params.status as string) || 'Segar';
@@ -30,7 +50,7 @@ export default function DetailScreen() {
   const rgb = (params.rgb as string) || 'R: 220, G: 168, B: 155';
   const staff = (params.staff as string) || 'Dwi Prasetyo';
   const image = (params.image as string) || '';
-  const location = 'SPPG Kalisari 1';
+  const location = (params.location as string) || 'SPPG Kalisari 1';
 
   // Parse RGB values to render a dynamic color preview block
   const parseRgbColor = (rgbStr: string) => {
@@ -69,9 +89,8 @@ export default function DetailScreen() {
           <Feather name="arrow-left" size={24} color="#0D0E10" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Detail Pemeriksaan</Text>
-        <TouchableOpacity style={styles.shareButton} activeOpacity={0.7}>
-          <Feather name="share-2" size={20} color="#0D0E10" />
-        </TouchableOpacity>
+        {/* Empty placeholder to keep Title centered */}
+        <View style={{ width: 40 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>

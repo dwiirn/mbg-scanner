@@ -17,7 +17,7 @@ export default function SplashScreen() {
     // Automatically navigate after 2.5 seconds
     const timer = setTimeout(() => {
       handleNavigate();
-    }, 2500);
+    }, 2500); // Kembalikan ke 2.5 detik untuk penggunaan normal
 
     return () => clearTimeout(timer);
   }, []);

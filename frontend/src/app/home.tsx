@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   StyleSheet,
   Text,
@@ -12,7 +12,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { HistoryItem, historyData } from '@/constants/history-store';
 import { useAuthStore } from '../store/auth-store';
@@ -70,6 +70,11 @@ export default function HomeScreen() {
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
+  // States for real-time today stats
+  const [statsTotal, setStatsTotal] = useState(0);
+  const [statsSegar, setStatsSegar] = useState(0);
+  const [statsTidakSegar, setStatsTidakSegar] = useState(0);
+
   const formatHistoryItems = (scans: any[]): HistoryItem[] => {
     return scans.map((scan) => {
       const d = new Date(scan.createdAt);
@@ -86,12 +91,38 @@ export default function HomeScreen() {
         status: scan.status as 'Segar' | 'Tidak Segar',
         rgb: `R: ${scan.r}, G: ${scan.g}, B: ${scan.b}`,
         staff: scan.User?.fullName || user?.fullName || 'Petugas',
+        location: user?.kitchenUnit || 'SPPG Kalisari 1',
         image: scan.image || undefined,
       };
     });
   };
 
-  const PAGE_SIZE = 10;
+  const PAGE_SIZE = 50;
+
+  const fetchTodayStats = async () => {
+    if (token === 'demo-jwt-token-expired-24h' || !token) {
+      // Demo fallback counts
+      setStatsTotal(historyData.length);
+      setStatsSegar(historyData.filter(item => item.status === 'Segar').length);
+      setStatsTidakSegar(historyData.filter(item => item.status === 'Tidak Segar').length);
+      return;
+    }
+
+    try {
+      const response = await axios.get(ENDPOINTS.STATS, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const { total, segar, tidakSegar } = response.data;
+      setStatsTotal(total || 0);
+      setStatsSegar(segar || 0);
+      setStatsTidakSegar(tidakSegar || 0);
+    } catch (error) {
+      console.warn('Error fetching stats:', error);
+      setStatsTotal(0);
+      setStatsSegar(0);
+      setStatsTidakSegar(0);
+    }
+  };
 
   const fetchScansHistory = async () => {
     if (token === 'demo-jwt-token-expired-24h' || !token) {
@@ -118,7 +149,7 @@ export default function HomeScreen() {
 
       setHasMore(response.data.length === PAGE_SIZE);
     } catch (error) {
-      console.error('Error fetching scan history:', error);
+      console.warn('Error fetching scan history:', error);
       setHistoryItems(historyData);
       setTotalCount(historyData.length);
       setHasMore(false);
@@ -152,15 +183,18 @@ export default function HomeScreen() {
       setPage(newPage);
       setHasMore(response.data.length === PAGE_SIZE);
     } catch (error) {
-      console.error('Error changing page:', error);
+      console.warn('Error changing page:', error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchScansHistory();
-  }, [token]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchScansHistory();
+      fetchTodayStats();
+    }, [token, activeTab])
+  );
   
   // Date Range Picker States
   const [startDate, setStartDate] = useState<Date | null>(null);
@@ -168,7 +202,9 @@ export default function HomeScreen() {
   const [isCalendarExpanded, setIsCalendarExpanded] = useState(false);
 
   // Custom Inline Calendar Picker States
-  const [calendarMonth, setCalendarMonth] = useState(new Date(2026, 5, 1)); // Default to June 2026
+  const [calendarMonth, setCalendarMonth] = useState(new Date());
+  const [calendarViewMode, setCalendarViewMode] = useState<'days' | 'months' | 'years'>('days');
+  const [yearGridStart, setYearGridStart] = useState(2020);
 
   const months = [
     'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -227,8 +263,9 @@ export default function HomeScreen() {
       if (clickedDate.getTime() < startDate.getTime()) {
         setStartDate(clickedDate);
       } else if (clickedDate.getTime() === startDate.getTime()) {
-        setStartDate(null);
-        setEndDate(null);
+        // Jika klik tanggal yang sama dua kali, jadikan rentang 1 hari tersebut dan tutup kalender
+        setEndDate(clickedDate);
+        setIsCalendarExpanded(false);
       } else {
         setEndDate(clickedDate);
         setIsCalendarExpanded(false); // Collapse calendar on range complete
@@ -319,12 +356,6 @@ export default function HomeScreen() {
   };
 
   const handleItemPress = (item: HistoryItem) => {
-    // Generate mock RGB values and staff name depending on quality
-    const mockRgb = item.status === 'Segar' 
-      ? 'R: 214, G: 160, B: 142' 
-      : 'R: 180, G: 130, B: 120';
-    const mockStaff = user?.fullName || 'Dwi Prasetyo';
-
     router.push({
       pathname: '/detail',
       params: {
@@ -333,8 +364,9 @@ export default function HomeScreen() {
         time: item.time,
         date: item.date,
         status: item.status,
-        rgb: mockRgb,
-        staff: mockStaff,
+        rgb: item.rgb,
+        staff: item.staff,
+        location: item.location,
         image: item.image,
       },
     });
@@ -464,11 +496,15 @@ export default function HomeScreen() {
                 ]}
                 activeOpacity={0.85}
                 onPress={() => {
+                  const today = new Date();
+                  const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                  setStartDate(startToday);
+                  setEndDate(startToday);
                   setActiveTab('riwayat');
                   setFilterMode('Semua');
                 }}
               >
-                <Text style={[styles.statsNumber, { color: '#1E60D5' }]}>{historyItems.length}</Text>
+                <Text style={[styles.statsNumber, { color: '#1E60D5' }]}>{statsTotal}</Text>
                 <Text style={styles.statsLabel}>Diperiksa</Text>
               </TouchableOpacity>
 
@@ -480,13 +516,15 @@ export default function HomeScreen() {
                 ]}
                 activeOpacity={0.85}
                 onPress={() => {
+                  const today = new Date();
+                  const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                  setStartDate(startToday);
+                  setEndDate(startToday);
                   setActiveTab('riwayat');
                   setFilterMode('Segar');
                 }}
               >
-                <Text style={[styles.statsNumber, { color: '#10B981' }]}>
-                  {historyItems.filter((item) => item.status === 'Segar').length}
-                </Text>
+                <Text style={[styles.statsNumber, { color: '#10B981' }]}>{statsSegar}</Text>
                 <Text style={styles.statsLabel}>Segar</Text>
               </TouchableOpacity>
 
@@ -498,13 +536,15 @@ export default function HomeScreen() {
                 ]}
                 activeOpacity={0.85}
                 onPress={() => {
+                  const today = new Date();
+                  const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                  setStartDate(startToday);
+                  setEndDate(startToday);
                   setActiveTab('riwayat');
                   setFilterMode('Tidak Segar');
                 }}
               >
-                <Text style={[styles.statsNumber, { color: '#EF4444' }]}>
-                  {historyItems.filter((item) => item.status === 'Tidak Segar').length}
-                </Text>
+                <Text style={[styles.statsNumber, { color: '#EF4444' }]}>{statsTidakSegar}</Text>
                 <Text style={styles.statsLabel}>Tidak Segar</Text>
               </TouchableOpacity>
             </View>
@@ -527,7 +567,12 @@ export default function HomeScreen() {
             {/* Recent History Header */}
             <View style={styles.sectionHeaderRow}>
               <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Riwayat Terakhir</Text>
-              <TouchableOpacity onPress={() => setActiveTab('riwayat')}>
+              <TouchableOpacity onPress={() => {
+                setStartDate(null);
+                setEndDate(null);
+                setFilterMode('Semua');
+                setActiveTab('riwayat');
+              }}>
                 <Text style={styles.seeAllText}>Lihat semua</Text>
               </TouchableOpacity>
             </View>
@@ -586,32 +631,131 @@ export default function HomeScreen() {
               {/* Collapsible Grid Section */}
               {isCalendarExpanded && (
                 <View style={styles.collapsibleCalendarContent}>
-                  {/* Header: Navigation prev/next */}
+                  {/* Header: Navigation prev/next & Mode selector */}
                   <View style={styles.calendarHeader}>
-                    <Text style={styles.calendarHeaderTitle}>
-                      {months[calendarMonth.getMonth()]} {calendarMonth.getFullYear()}
-                    </Text>
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                      <TouchableOpacity style={styles.calendarNavButton} onPress={handlePrevMonth}>
-                        <Feather name="chevron-left" size={18} color="#1E60D5" />
+                    <View style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+                      <TouchableOpacity 
+                        activeOpacity={0.7}
+                        onPress={() => setCalendarViewMode(calendarViewMode === 'months' ? 'days' : 'months')}
+                      >
+                        <Text style={[styles.calendarMonthHeaderTitle, calendarViewMode === 'months' && { color: '#1E60D5' }]}>
+                          {months[calendarMonth.getMonth()]}
+                        </Text>
                       </TouchableOpacity>
-                      <TouchableOpacity style={styles.calendarNavButton} onPress={handleNextMonth}>
-                        <Feather name="chevron-right" size={18} color="#1E60D5" />
+                      <TouchableOpacity 
+                        activeOpacity={0.7}
+                        onPress={() => {
+                          if (calendarViewMode !== 'years') {
+                            const curYear = calendarMonth.getFullYear();
+                            setYearGridStart(curYear - 5); // Center the 12-year grid around the current year
+                          }
+                          setCalendarViewMode(calendarViewMode === 'years' ? 'days' : 'years');
+                        }}
+                        style={{ marginTop: 2 }}
+                      >
+                        <Text style={[styles.calendarYearHeaderTitle, calendarViewMode === 'years' && { color: '#1E60D5' }]}>
+                          {calendarMonth.getFullYear()}
+                        </Text>
                       </TouchableOpacity>
                     </View>
+                    
+                    {calendarViewMode === 'days' && (
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <TouchableOpacity style={styles.calendarNavButton} onPress={handlePrevMonth}>
+                          <Feather name="chevron-left" size={18} color="#1E60D5" />
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.calendarNavButton} onPress={handleNextMonth}>
+                          <Feather name="chevron-right" size={18} color="#1E60D5" />
+                        </TouchableOpacity>
+                      </View>
+                    )}
+
+                    {calendarViewMode === 'years' && (
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <TouchableOpacity style={styles.calendarNavButton} onPress={() => setYearGridStart(yearGridStart - 12)}>
+                          <Feather name="chevron-left" size={18} color="#1E60D5" />
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.calendarNavButton} onPress={() => setYearGridStart(yearGridStart + 12)}>
+                          <Feather name="chevron-right" size={18} color="#1E60D5" />
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                          style={[styles.calendarNavButton, { backgroundColor: '#FEE2E2' }]} 
+                          onPress={() => setCalendarViewMode('days')}
+                          activeOpacity={0.7}
+                        >
+                          <Feather name="x" size={18} color="#EF4444" />
+                        </TouchableOpacity>
+                      </View>
+                    )}
+
+                    {calendarViewMode === 'months' && (
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <TouchableOpacity 
+                          style={[styles.calendarNavButton, { backgroundColor: '#FEE2E2' }]} 
+                          onPress={() => setCalendarViewMode('days')}
+                          activeOpacity={0.7}
+                        >
+                          <Feather name="x" size={18} color="#EF4444" />
+                        </TouchableOpacity>
+                      </View>
+                    )}
                   </View>
 
-                  {/* Weekday labels */}
-                  <View style={styles.weekdaysRow}>
-                    {['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'].map((day) => (
-                      <Text key={day} style={styles.weekdayLabel}>
-                        {day}
-                      </Text>
-                    ))}
-                  </View>
+                  {calendarViewMode === 'days' && (
+                    <>
+                      {/* Weekday labels */}
+                      <View style={styles.weekdaysRow}>
+                        {['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'].map((day) => (
+                          <Text key={day} style={styles.weekdayLabel}>
+                            {day}
+                          </Text>
+                        ))}
+                      </View>
 
-                  {/* Days grid */}
-                  <View style={styles.daysGrid}>{renderCalendarDays()}</View>
+                      {/* Days grid */}
+                      <View style={styles.daysGrid}>{renderCalendarDays()}</View>
+                    </>
+                  )}
+
+                  {calendarViewMode === 'months' && (
+                    <View style={styles.monthsGrid}>
+                      {monthsShort.map((m, idx) => {
+                        const isCurrentMonth = calendarMonth.getMonth() === idx;
+                        return (
+                          <TouchableOpacity
+                            key={m}
+                            style={[styles.monthCell, isCurrentMonth && styles.monthCellActive]}
+                            onPress={() => {
+                              setCalendarMonth(new Date(calendarMonth.getFullYear(), idx, 1));
+                              setCalendarViewMode('days');
+                            }}
+                          >
+                            <Text style={[styles.monthText, isCurrentMonth && styles.monthTextActive]}>{m}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  )}
+
+                  {calendarViewMode === 'years' && (
+                    <View style={styles.yearsGrid}>
+                      {Array.from({ length: 12 }, (_, i) => yearGridStart + i).map((y) => {
+                        const isCurrentYear = calendarMonth.getFullYear() === y;
+                        return (
+                          <TouchableOpacity
+                            key={y}
+                            style={[styles.yearCell, isCurrentYear && styles.yearCellActive]}
+                            onPress={() => {
+                              setCalendarMonth(new Date(y, calendarMonth.getMonth(), 1));
+                              setCalendarViewMode('days');
+                            }}
+                          >
+                            <Text style={[styles.yearText, isCurrentYear && styles.yearTextActive]}>{y}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  )}
                 </View>
               )}
             </View>
@@ -744,7 +888,12 @@ export default function HomeScreen() {
         {/* Tab 2: Riwayat */}
         <TouchableOpacity
           style={styles.tabButton}
-          onPress={() => setActiveTab('riwayat')}
+          onPress={() => {
+            setStartDate(null);
+            setEndDate(null);
+            setFilterMode('Semua');
+            setActiveTab('riwayat');
+          }}
         >
           <MaterialCommunityIcons
             name="history"
@@ -1160,10 +1309,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
-  calendarHeaderTitle: {
-    fontSize: 16,
+  calendarMonthHeaderTitle: {
+    fontSize: 18,
     fontWeight: 'bold',
-    color: '#1E60D5',
+    color: '#1E293B',
+  },
+  calendarYearHeaderTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748B',
   },
   calendarNavButton: {
     width: 36,
@@ -1235,6 +1389,66 @@ const styles = StyleSheet.create({
     height: 4,
     borderRadius: 2,
     backgroundColor: '#1E60D5',
+  },
+  monthsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    rowGap: 12,
+    columnGap: 8,
+    paddingVertical: 12,
+    justifyContent: 'space-between',
+  },
+  monthCell: {
+    width: '30%',
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  monthCellActive: {
+    backgroundColor: '#1E60D5',
+    borderColor: '#1E60D5',
+  },
+  monthText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  monthTextActive: {
+    color: '#FFFFFF',
+  },
+  yearsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    rowGap: 12,
+    columnGap: 8,
+    paddingVertical: 12,
+    justifyContent: 'space-between',
+  },
+  yearCell: {
+    width: '45%',
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  yearCellActive: {
+    backgroundColor: '#1E60D5',
+    borderColor: '#1E60D5',
+  },
+  yearText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  yearTextActive: {
+    color: '#FFFFFF',
   },
   inlineCalendarFooter: {
     flexDirection: 'row',

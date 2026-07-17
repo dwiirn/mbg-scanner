@@ -6,6 +6,7 @@ export interface HistoryItem {
   status: 'Segar' | 'Tidak Segar';
   rgb: string;
   staff: string;
+  location?: string; // unit dapur tempat pemeriksaan dilakukan
   image?: string; // URI lokal atau nama file di uploads backend
 }
 

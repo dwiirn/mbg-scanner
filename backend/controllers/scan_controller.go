@@ -20,11 +20,13 @@ import (
 // Tunable parameters for the RGB/HSV freshness calculation.
 // See docs/perhitungan-kesegaran-ayam.md. Calibrate these against real photos.
 const (
+	minMeatRed         = 130  // kecerahan R minimum agar piksel dianggap daging ayam (mencegah jeans gelap/bayangan lolos)
 	meatSatMin         = 0.15 // saturasi minimum agar pixel dianggap daging (buang abu-abu/putih)
 	hueTolerance       = 60.0 // toleransi jarak hue (derajat) dari merah (ayam mentah pink-oranye ~20-30 derajat)
 	satTarget          = 0.25 // saturasi acuan untuk skor penuh (ayam relatif pucat)
 	redTarget          = 0.15 // dominasi merah (R-G)/R acuan untuk skor penuh
-	freshnessThreshold = 50.0 // >= ini -> "Segar"
+	freshnessThreshold = 55.0 // >= ini -> "Segar" (ditingkatkan dari 50.0 agar lebih ketat)
+	minRednessDiff     = 22.0 // selisih rata-rata R-G minimal untuk kategori Segar berdasarkan penelitian terdahulu
 	// Bobot skor: hue paling menentukan, lalu dominasi merah, lalu saturasi.
 	weightHue = 0.5
 	weightSat = 0.2
@@ -247,7 +249,9 @@ func AnalyzeImage(c *fiber.Ctx) error {
 
 			// Tahap 1: filter pixel daging (buang background dapur).
 			h, s, _ := rgbToHSV(r, g, b)
-			if r > g && r > b && r >= 60 && r <= 245 && s >= meatSatMin {
+			// Hanya deteksi piksel yang berwarna kemerahan/pink khas daging ayam (Hue <= 35 atau >= 340)
+			isMeatHue := h <= 35 || h >= 340
+			if r > g && r > b && r >= minMeatRed && r <= 245 && s >= meatSatMin && isMeatHue {
 				meatR += uint64(r)
 				meatG += uint64(g)
 				meatB += uint64(b)
@@ -270,21 +274,32 @@ func AnalyzeImage(c *fiber.Ctx) error {
 	var rAvg, gAvg, bAvg uint8
 	var meanHue, meanSat float64
 
-	if meatCount > 0 {
-		rAvg = uint8(meatR / meatCount)
-		gAvg = uint8(meatG / meatCount)
-		bAvg = uint8(meatB / meatCount)
-		meanHue = math.Atan2(sumSin/float64(meatCount), sumCos/float64(meatCount)) * 180.0 / math.Pi
-		if meanHue < 0 {
-			meanHue += 360
-		}
-		meanSat = sumSat / float64(meatCount)
-	} else {
-		// Fallback: pixel daging tidak terdeteksi -> pakai rata-rata seluruh gambar.
-		rAvg = uint8(totalR / totalCount)
-		gAvg = uint8(totalG / totalCount)
-		bAvg = uint8(totalB / totalCount)
-		meanHue, meanSat, _ = rgbToHSV(rAvg, gAvg, bAvg)
+	// Cek persentase piksel objek daging dalam gambar.
+	// Jika terlalu sedikit (misal < 5%), anggap gambar tidak berisi objek daging.
+	meatRatio := float64(meatCount) / float64(totalCount)
+	if meatCount == 0 || meatRatio < 0.05 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Objek daging tidak terdeteksi. Pastikan objek berada di tengah kamera dengan pencahayaan cukup.",
+		})
+	}
+
+	rAvg = uint8(meatR / meatCount)
+	gAvg = uint8(meatG / meatCount)
+	bAvg = uint8(meatB / meatCount)
+	meanHue = math.Atan2(sumSin/float64(meatCount), sumCos/float64(meatCount)) * 180.0 / math.Pi
+	if meanHue < 0 {
+		meanHue += 360
+	}
+	meanSat = sumSat / float64(meatCount)
+
+	// Validasi warna rata-rata objek daging:
+	// 1. Jika R rata-rata <= 148: objek terlalu gelap (seperti bayangan tebal, jeans, atau meja kayu gelap).
+	// 2. Jika Hue rata-rata >= 32.0 derajat: warna terlalu kuning-oranye (seperti kulit tangan manusia atau permukaan kayu terang).
+	// 3. Jika Hue >= 28.0 derajat dan R rata-rata >= 162: objek terang dengan rona kulit/kayu (bukan daging busuk/gelap).
+	if rAvg <= 148 || meanHue >= 32.0 || (meanHue >= 28.0 && rAvg >= 162) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Objek terdeteksi bukan daging ayam. Silakan posisikan daging ayam di tengah kamera dan coba lagi.",
+		})
 	}
 
 	// Tahap 3: scoring 0-100 dari hue, saturasi, dan dominasi merah.
@@ -297,10 +312,23 @@ func AnalyzeImage(c *fiber.Ctx) error {
 	}
 	freshness := 100 * (weightHue*hueScore + weightSat*satScore + weightRed*redScore)
 
-	// Tahap 4: kategori (2 kelas).
+	// Penalti Kecerahan (CIE L* Lightness): Daging ayam segar secara alami berwarna terang (R >= 175).
+	// Jika daging terlalu gelap/kusam (R < 175), kurangi skor secara proporsional.
+	if rAvg < 175 {
+		penalty := float64(175-rAvg) * 2.0
+		freshness -= penalty
+	}
+
+	// Tahap 4: kategori (2 kelas) dengan aturan ganda (Hybrid Score + Batas Fisik R-G)
 	status := "Tidak Segar"
-	if freshness >= freshnessThreshold {
+	if freshness >= freshnessThreshold && (float64(rAvg)-float64(gAvg)) >= minRednessDiff {
 		status = "Segar"
+	}
+
+	// Batas Kecerahan Fisik: Jika rata-rata warna merah (R) berada di bawah atau sama dengan 162 (rentang kusam/gelap 100-162),
+	// maka daging ayam otomatis divonis sebagai "Tidak Segar" (berdasarkan batas penelitian terdahulu).
+	if rAvg <= 162 {
+		status = "Tidak Segar"
 	}
 
 	// Simpan gambar ke folder uploads agar bisa ditampilkan di riwayat.
@@ -325,5 +353,59 @@ func AnalyzeImage(c *fiber.Ctx) error {
 		"g":      gAvg,
 		"b":      bAvg,
 		"image":  savedName,
+	})
+}
+
+// GetScanStats returns the stats of scans performed today for the authenticated user
+func GetScanStats(c *fiber.Ctx) error {
+	userIdVal := c.Locals("userId")
+	var uid uint32
+	switch v := userIdVal.(type) {
+	case float64:
+		uid = uint32(v)
+	case uint32:
+		uid = v
+	case int:
+		uid = uint32(v)
+	default:
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Identitas user ID tidak valid",
+		})
+	}
+
+	// Calculate start and end of today in local server time
+	now := time.Now()
+	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	endOfDay := startOfDay.Add(24 * time.Hour)
+
+	var totalCount int64
+	var segarCount int64
+	var tidakSegarCount int64
+
+	// Count total today
+	if err := config.DB.Model(&models.Scan{}).
+		Where("user_id = ? AND created_at >= ? AND created_at < ?", uid, startOfDay, endOfDay).
+		Count(&totalCount).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Gagal menghitung statistik"})
+	}
+
+	// Count Segar today
+	if err := config.DB.Model(&models.Scan{}).
+		Where("user_id = ? AND status = ? AND created_at >= ? AND created_at < ?", uid, "Segar", startOfDay, endOfDay).
+		Count(&segarCount).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Gagal menghitung statistik"})
+	}
+
+	// Count Tidak Segar today
+	if err := config.DB.Model(&models.Scan{}).
+		Where("user_id = ? AND status = ? AND created_at >= ? AND created_at < ?", uid, "Tidak Segar", startOfDay, endOfDay).
+		Count(&tidakSegarCount).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Gagal menghitung statistik"})
+	}
+
+	return c.JSON(fiber.Map{
+		"total":      totalCount,
+		"segar":      segarCount,
+		"tidakSegar": tidakSegarCount,
 	})
 }
