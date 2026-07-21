@@ -37,6 +37,33 @@ export default function CameraScreen() {
   const [currentRgb, setCurrentRgb] = useState({ r: 0, g: 0, b: 0 });
 
   const cameraRef = useRef<CameraView>(null);
+  const webcamVideoRef = useRef<any>(null);
+
+  // Initialize live HTML5 webcam stream when demoing on Web / Laptop browser
+  useEffect(() => {
+    if (Platform.OS === 'web' && cameraState === 'empty') {
+      let stream: MediaStream | null = null;
+      if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
+        navigator.mediaDevices
+          .getUserMedia({ video: { facingMode: 'user' } })
+          .then((s) => {
+            stream = s;
+            if (webcamVideoRef.current) {
+              webcamVideoRef.current.srcObject = s;
+              webcamVideoRef.current.play().catch(() => {});
+            }
+          })
+          .catch((err) => {
+            console.log('Webcam access error:', err);
+          });
+      }
+      return () => {
+        if (stream) {
+          stream.getTracks().forEach((track) => track.stop());
+        }
+      };
+    }
+  }, [cameraState]);
 
   // Laser scanner animation
   const scanAnim = useRef(new Animated.Value(0)).current;
@@ -145,6 +172,24 @@ export default function CameraScreen() {
   const handleTakePhoto = async () => {
     if (cameraState === 'empty') {
       try {
+        if (Platform.OS === 'web' && webcamVideoRef.current) {
+          const video = webcamVideoRef.current;
+          const canvas = document.createElement('canvas');
+          canvas.width = video.videoWidth || 640;
+          canvas.height = video.videoHeight || 480;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.translate(canvas.width, 0);
+            ctx.scale(-1, 1);
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const dataUrl = canvas.toDataURL('image/png');
+            setCapturedPhotoUri(dataUrl);
+            setCameraState('scanning');
+            setAnalysisResult(null);
+            return;
+          }
+        }
+
         if (cameraRef.current) {
           const photo = await cameraRef.current.takePictureAsync({
             quality: 0.8,
@@ -156,7 +201,6 @@ export default function CameraScreen() {
             setAnalysisResult(null);
           }
         } else {
-          // If cameraRef is null (e.g. web/simulators), set uri to null to trigger mock analysis
           setCapturedPhotoUri(null);
           setCameraState('scanning');
           setAnalysisResult(null);
@@ -316,9 +360,23 @@ export default function CameraScreen() {
             {/* Live Camera Feed */}
             {cameraState === 'empty' && (
               Platform.OS === 'web' ? (
-                <View style={[StyleSheet.absoluteFill, styles.emptyViewport, { backgroundColor: '#1E293B' }]}>
-                  <Feather name="video" size={48} color="#94A3B8" style={{ marginBottom: 12 }} />
-                  <Text style={styles.emptyViewportText}>Kamera Web Demo (Klik Ambil Foto)</Text>
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: '#0F172A', overflow: 'hidden' }]}>
+                  {/* @ts-ignore */}
+                  <video
+                    ref={webcamVideoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      transform: 'scaleX(-1)',
+                    }}
+                  />
+                  <View style={[StyleSheet.absoluteFill, styles.emptyViewport]} pointerEvents="none">
+                    <Text style={styles.emptyViewportText}>Posisikan objek dalam bingkai</Text>
+                  </View>
                 </View>
               ) : (
                 <>

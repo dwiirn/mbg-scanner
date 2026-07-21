@@ -1,9 +1,12 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
 import { Stack } from 'expo-router';
-import { useColorScheme, Platform } from 'react-native';
+import { useColorScheme, Platform, LogBox } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import CustomAlert from '../components/ui/custom-alert';
+
+// Sembunyikan semua notifikasi log/warning developer agar tampilan HP bersih saat didemonstrasikan
+LogBox.ignoreAllLogs();
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -18,12 +21,31 @@ export default function RootLayout() {
             __html: `
               @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
               
-              html, body, #root {
+              html, body {
                 margin: 0;
                 padding: 0;
-                overflow-x: hidden;
+                background-color: #0F172A;
                 width: 100%;
                 height: 100%;
+                overflow-x: hidden;
+              }
+              
+              #root {
+                width: 100%;
+                max-width: 460px;
+                height: 100%;
+                margin: 0 auto;
+                background-color: #FFFFFF;
+                box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+                position: relative;
+                overflow: hidden;
+              }
+
+              @media (max-width: 500px) {
+                #root {
+                  max-width: 100%;
+                  box-shadow: none;
+                }
               }
               
               /* Terapkan font Plus Jakarta Sans ke seluruh elemen KECUALI yang memiliki class/style font khusus (seperti Icon) */
