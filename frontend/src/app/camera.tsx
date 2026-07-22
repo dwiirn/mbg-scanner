@@ -542,8 +542,14 @@ export default function CameraScreen() {
             )}
           </TouchableOpacity>
 
-          {/* Right: Spacer for centering shutter button */}
-          <View style={{ width: 44 }} />
+          {/* Right: Tombol Flip Kamera (Depan <-> Belakang) */}
+          <TouchableOpacity
+            style={[styles.galleryPreview, { justifyContent: 'center', alignItems: 'center' }]}
+            activeOpacity={0.8}
+            onPress={toggleCameraFacing}
+          >
+            <Feather name="refresh-cw" size={20} color="#FFFFFF" />
+          </TouchableOpacity>
         </View>
       )}
     </SafeAreaView>
