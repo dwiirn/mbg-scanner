@@ -39,13 +39,18 @@ export default function CameraScreen() {
   const cameraRef = useRef<CameraView>(null);
   const webcamVideoRef = useRef<any>(null);
 
+  const toggleCameraFacing = () => {
+    setFacing((current) => (current === 'back' ? 'front' : 'back'));
+  };
+
   // Initialize live HTML5 webcam stream when demoing on Web / Laptop browser
   useEffect(() => {
     if (Platform.OS === 'web' && cameraState === 'empty') {
       let stream: MediaStream | null = null;
+      const mode = facing === 'front' ? 'user' : 'environment';
       if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
         navigator.mediaDevices
-          .getUserMedia({ video: { facingMode: 'user' } })
+          .getUserMedia({ video: { facingMode: mode } })
           .then((s) => {
             stream = s;
             if (webcamVideoRef.current) {
@@ -63,7 +68,7 @@ export default function CameraScreen() {
         }
       };
     }
-  }, [cameraState]);
+  }, [cameraState, facing]);
 
   // Laser scanner animation
   const scanAnim = useRef(new Animated.Value(0)).current;
@@ -343,7 +348,13 @@ export default function CameraScreen() {
           <Feather name="arrow-left" size={24} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Pindai Daging</Text>
-        <View style={{ width: 40 }} />
+        <TouchableOpacity
+          style={styles.iconButton}
+          onPress={toggleCameraFacing}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Feather name="refresh-cw" size={20} color="#FFFFFF" />
+        </TouchableOpacity>
       </View>
 
       {/* Viewfinder Section (Frame 6 / Frame 7) */}
@@ -371,7 +382,7 @@ export default function CameraScreen() {
                       width: '100%',
                       height: '100%',
                       objectFit: 'cover',
-                      transform: 'scaleX(-1)',
+                      transform: facing === 'front' ? 'scaleX(-1)' : 'none',
                     }}
                   />
                   <View style={[StyleSheet.absoluteFill, styles.emptyViewport]} pointerEvents="none">
@@ -540,8 +551,14 @@ export default function CameraScreen() {
             )}
           </TouchableOpacity>
 
-          {/* Right: Spacer for centering shutter button (Swap camera button removed) */}
-          <View style={{ width: 44 }} />
+          {/* Right: Swap camera button (Kamera Depan <-> Belakang) */}
+          <TouchableOpacity
+            style={[styles.galleryPreview, { justifyContent: 'center', alignItems: 'center' }]}
+            activeOpacity={0.8}
+            onPress={toggleCameraFacing}
+          >
+            <Feather name="refresh-cw" size={20} color="#FFFFFF" />
+          </TouchableOpacity>
         </View>
       )}
     </SafeAreaView>
