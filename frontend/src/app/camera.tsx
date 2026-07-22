@@ -346,13 +346,7 @@ export default function CameraScreen() {
           <Feather name="arrow-left" size={24} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Pindai Daging</Text>
-        <TouchableOpacity
-          style={styles.iconButton}
-          onPress={toggleCameraFacing}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Feather name="refresh-cw" size={20} color="#FFFFFF" />
-        </TouchableOpacity>
+        <View style={{ width: 40 }} />
       </View>
 
       {/* Viewfinder Section (Frame 6 / Frame 7) */}
@@ -548,14 +542,8 @@ export default function CameraScreen() {
             )}
           </TouchableOpacity>
 
-          {/* Right: Swap camera button (Kamera Depan <-> Belakang) */}
-          <TouchableOpacity
-            style={[styles.galleryPreview, { justifyContent: 'center', alignItems: 'center' }]}
-            activeOpacity={0.8}
-            onPress={toggleCameraFacing}
-          >
-            <Feather name="refresh-cw" size={20} color="#FFFFFF" />
-          </TouchableOpacity>
+          {/* Right: Spacer for centering shutter button */}
+          <View style={{ width: 44 }} />
         </View>
       )}
     </SafeAreaView>
