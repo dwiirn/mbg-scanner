@@ -184,8 +184,6 @@ export default function CameraScreen() {
           canvas.height = video.videoHeight || 480;
           const ctx = canvas.getContext('2d');
           if (ctx) {
-            ctx.translate(canvas.width, 0);
-            ctx.scale(-1, 1);
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             const dataUrl = canvas.toDataURL('image/png');
             setCapturedPhotoUri(dataUrl);
@@ -382,7 +380,6 @@ export default function CameraScreen() {
                       width: '100%',
                       height: '100%',
                       objectFit: 'cover',
-                      transform: facing === 'front' ? 'scaleX(-1)' : 'none',
                     }}
                   />
                   <View style={[StyleSheet.absoluteFill, styles.emptyViewport]} pointerEvents="none">
